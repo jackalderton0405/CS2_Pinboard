@@ -3,7 +3,6 @@ using Colossal.Logging;
 using Game;
 using Game.Modding;
 using Game.SceneFlow;
-using HarmonyLib;
 using PinIt.Systems;
 using System;
 
@@ -14,7 +13,6 @@ namespace PinIt
         public static ILog log = LogManager.GetLogger($"{nameof(PinIt)}.{nameof(Mod)}").SetShowsErrorsInUI(false);
 
         private Setting m_Setting;
-        private Harmony m_Harmony;
 
         public void OnLoad(UpdateSystem updateSystem)
         {
@@ -59,18 +57,6 @@ namespace PinIt
 
                 try
                 {
-                    m_Harmony = new Harmony("com.pinit.mod");
-                    m_Harmony.PatchAll(typeof(Mod).Assembly);
-                    log.Info("[PinIt] Harmony patches applied");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[PinIt] Harmony patching failed: {ex}");
-                    log.Error($"[PinIt] Harmony patching failed: {ex}");
-                }
-
-                try
-                {
                     updateSystem.UpdateAt<PinItUISystem>(SystemUpdatePhase.UIUpdate);
                     log.Info("[PinIt] UI system registered");
                 }
@@ -93,7 +79,6 @@ namespace PinIt
         public void OnDispose()
         {
             log.Info(nameof(OnDispose));
-            m_Harmony?.UnpatchAll("com.pinit.mod");
             m_Setting?.UnregisterInOptionsUI();
             m_Setting = null;
         }

@@ -12,10 +12,6 @@
 	<Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.targets" />
 
 	<ItemGroup>
-		<Reference Include="0Harmony">
-			<HintPath>lib\0Harmony.dll</HintPath>
-			<Private>true</Private>
-		</Reference>
 		<Reference Include="Newtonsoft.Json">
 			<Private>false</Private>
 		</Reference>

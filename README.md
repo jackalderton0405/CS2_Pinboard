@@ -88,4 +88,4 @@ PinIt/
 
 ## License
 
-_TODO: add a license (e.g. MIT) before public release._
+Released under the [MIT License](LICENSE).

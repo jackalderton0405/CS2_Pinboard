@@ -1,6 +1,7 @@
 using Colossal.Serialization.Entities;
 using Colossal.UI.Binding;
 using Game;
+using Game.Input;
 using Game.Prefabs;
 using Game.Rendering;
 using Game.SceneFlow;
@@ -16,8 +17,11 @@ namespace PinIt.Systems
 {
     public partial class PinItUISystem : UISystemBase
     {
+        public static PinItUISystem Instance { get; private set; }
+
         private ToolSystem m_ToolSystem;
         private PrefabSystem m_PrefabSystem;
+        private ProxyAction m_TogglePanelAction;
 
         private FavouritesData m_Favourites;
         private bool m_Searched;
@@ -64,12 +68,16 @@ namespace PinIt.Systems
         protected override void OnCreate()
         {
             base.OnCreate();
+            Instance = this;
             Mod.log.Info("[PinIt] PinItUISystem created");
 
             m_ToolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
             m_PrefabSystem = World.GetOrCreateSystemManaged<PrefabSystem>();
 
             m_ToolSystem.EventPrefabChanged += OnPrefabChanged;
+
+            m_TogglePanelAction = Mod.Setting?.GetAction(Setting.kTogglePanelActionName);
+            if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = true;
 
             AddBinding(new TriggerBinding("pinIt", "togglePanel", OnTogglePanel));
             AddBinding(m_PanelOpenBinding = new ValueBinding<bool>("pinIt", "panelOpen", false));
@@ -411,19 +419,35 @@ namespace PinIt.Systems
             Mod.log.Info($"[PinIt] Loaded — {m_Favourites.Collections.Count} collections");
         }
 
+        // Called by the settings page after it edits favourites.json directly,
+        // so the live in-game panel reflects the change immediately.
+        public void ReloadFromDisk()
+        {
+            m_Favourites = FavouritesService.Load();
+            PushAll();
+            Mod.log.Info("[PinIt] Reloaded favourites from disk (settings edit)");
+        }
+
         protected override void OnUpdate()
         {
-            if (m_Searched || m_Favourites != null) return;
-            if (GameManager.instance?.gameMode != GameMode.Game &&
-                GameManager.instance?.gameMode != GameMode.Editor) return;
-            m_Searched = true;
-            LoadFavourites();
+            if (!m_Searched && m_Favourites == null &&
+                (GameManager.instance?.gameMode == GameMode.Game ||
+                 GameManager.instance?.gameMode == GameMode.Editor))
+            {
+                m_Searched = true;
+                LoadFavourites();
+            }
+
+            if (m_TogglePanelAction != null && m_TogglePanelAction.WasPerformedThisFrame())
+                OnTogglePanel();
         }
 
         protected override void OnDestroy()
         {
             m_ToolSystem.EventPrefabChanged -= OnPrefabChanged;
+            if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = false;
             if (m_Favourites != null) FavouritesService.Save(m_Favourites);
+            if (Instance == this) Instance = null;
             base.OnDestroy();
         }
     }

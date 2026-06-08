@@ -33,7 +33,7 @@ This is a beta release — feedback and bug reports are very welcome.
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.0" />
+	<ModVersion Value="1.0.1" />
 	<!--Recommended version of the base game to use the mod-->
 	<GameVersion Value="1.0.*" />
 	<!--Dependency for the mod, can be set multiple times-->
@@ -41,9 +41,15 @@ This is a beta release — feedback and bug reports are very welcome.
 	<!--Required DLC, can be set multiple times. Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture"-->
 	<RequiredDLC Value="" />
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
-	<ChangeLog Value="Initial beta release." />
-	<!--<ChangeLog>
-	</ChangeLog>-->
+	<ChangeLog>
+# 1.0.1
+
+- Fixed: sculptures, props and custom assets now correctly activate their placement tool when selected from a collection (previously only buildings worked reliably).
+- New: press Ctrl+B to open or close the PinIt panel. The shortcut can be rebound in Options > Keybindings.
+- New: manage your collections and filters from the mod's Options page — clear or delete a collection or filter, with a Refresh button to pull in your latest in-game changes.
+- Improved: the panel now uses the game's own font and has clearer text contrast.
+- Improved: delete confirmations now use the native game dialog.
+	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<ExternalLink Type="github" Url="https://github.com/jackalderton0405/CS2_PinIt" />
 	<!--Supported values Public, Private, Unlisted-->

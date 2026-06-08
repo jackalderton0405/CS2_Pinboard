@@ -12,6 +12,8 @@ namespace PinIt
     {
         public static ILog log = LogManager.GetLogger($"{nameof(PinIt)}.{nameof(Mod)}").SetShowsErrorsInUI(false);
 
+        public static Setting Setting { get; private set; }
+
         private Setting m_Setting;
 
         public void OnLoad(UpdateSystem updateSystem)
@@ -25,6 +27,8 @@ namespace PinIt
                 {
                     m_Setting = new Setting(this);
                     m_Setting.RegisterInOptionsUI();
+                    m_Setting.RegisterKeyBindings();
+                    Setting = m_Setting;
                     log.Info("[PinIt] Settings registered");
                 }
                 catch (Exception ex)
@@ -81,6 +85,7 @@ namespace PinIt
             log.Info(nameof(OnDispose));
             m_Setting?.UnregisterInOptionsUI();
             m_Setting = null;
+            Setting = null;
         }
     }
 }

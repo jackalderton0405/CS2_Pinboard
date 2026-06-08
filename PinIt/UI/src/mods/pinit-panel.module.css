@@ -13,7 +13,7 @@
   flex-direction: column;
   z-index: 1000;
   pointer-events: auto;
-  font-family: "Nunito Sans", sans-serif;
+  font-family: var(--fontFamily);
 }
 .panelExpanded  { height: 620rem; overflow: hidden; }
 .panelCollapsed { height: auto;   overflow: visible; }
@@ -364,7 +364,7 @@
 .favName {
   flex: 1; min-width: 0;
   font-size: 15rem;
-  color: var(--menuText2Normal);
+  color: var(--menuText1Normal);
   cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .favRow:hover .favName { color: var(--menuText1Normal); }
@@ -408,42 +408,3 @@
 }
 .checkboxRow:hover  { background-color: var(--menuHoverColor); }
 .checkboxRowChecked { color: var(--menuText1Normal); }
-
-/* ── Confirmation dialog ─────────────────────────────────────────────────── */
-.dialogBackdrop {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.55);
-  z-index: 9998; pointer-events: auto;
-}
-.dialog {
-  position: fixed; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 9999; min-width: 320rem;
-  background-color: var(--panelColorDark);
-  backdrop-filter: var(--panelBlur);
-  border: 1px solid var(--menuBorderColor1);
-  border-radius: 8rem; padding: 24rem;
-  box-shadow: 0 8rem 40rem rgba(0,0,0,0.9);
-  pointer-events: auto;
-}
-.dialogText {
-  font-size: 15rem; color: var(--menuText1Normal);
-  margin-bottom: 20rem; line-height: 1.6;
-}
-.dialogBtns { display: flex; gap: 8rem; }
-.dialogDeleteBtn {
-  flex: 1; text-align: center; padding: 9rem 0;
-  border-radius: 4rem; font-size: 14rem; cursor: pointer;
-  background: rgba(180,0,0,0.5);
-  border: 1px solid rgba(220,60,60,0.5);
-  color: var(--menuText1Normal); font-weight: bold;
-}
-.dialogDeleteBtn:hover { background: rgba(210,0,0,0.75); border-color: rgba(220,60,60,0.8); }
-.dialogCancelBtn {
-  flex: 1; text-align: center; padding: 9rem 0;
-  border-radius: 4rem; font-size: 14rem; cursor: pointer;
-  background-color: var(--toolbarFieldColor);
-  border: 1px solid var(--menuBorderColor1);
-  color: var(--menuText2Normal);
-}
-.dialogCancelBtn:hover { background-color: var(--menuHoverColor); color: var(--menuText1Normal); }

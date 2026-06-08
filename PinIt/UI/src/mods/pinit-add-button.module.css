@@ -7,7 +7,7 @@
   background-color: var(--panelColorDark);
   backdrop-filter: var(--panelBlur);
   border: 1px solid var(--menuBorderColor1);
-  font-family: "Nunito Sans", sans-serif;
+  font-family: var(--fontFamily);
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { trigger, useValue, bindValue } from "cs2/api";
+import { ConfirmationDialog, Portal } from "cs2/ui";
 import styles from "./pinit-panel.module.css";
 import "./pinit-scrollbar.css";
 
@@ -602,21 +603,22 @@ export const PinItPanel = () => {
             )}
         </div>
 
-        {/* ── Confirmation dialog (outside panel — Coherent GT clips fixed inside overflow:hidden) ── */}
-        {pendingDelete !== null && (<>
-            <div className={styles.dialogBackdrop} onClick={() => setPendingDelete(null)} />
-            <div className={styles.dialog}>
-                <div className={styles.dialogText}>
-                    {pendingDelete.kind === "collection"
+        {/* ── Confirmation dialog — native game dialog, portaled out of the overflow:hidden panel ── */}
+        {pendingDelete !== null && (
+            <Portal>
+                <ConfirmationDialog
+                    title={pendingDelete.kind === "collection" ? "Delete Collection" : "Delete Filter"}
+                    message={pendingDelete.kind === "collection"
                         ? `Delete collection '${pendingDelete.name}'? All pins and filters inside will be removed.`
                         : `Delete filter '${pendingDelete.name}'? Pins will remain in the collection.`}
-                </div>
-                <div className={styles.dialogBtns}>
-                    <div className={styles.dialogDeleteBtn} onClick={confirmDelete}>{"Yes, Delete"}</div>
-                    <div className={styles.dialogCancelBtn} onClick={() => setPendingDelete(null)}>{"Cancel"}</div>
-                </div>
-            </div>
-        </>)}
+                    confirm={"Delete"}
+                    cancel={"Cancel"}
+                    multiline={true}
+                    onConfirm={() => confirmDelete()}
+                    onCancel={() => setPendingDelete(null)}
+                />
+            </Portal>
+        )}
         </>
     );
 };

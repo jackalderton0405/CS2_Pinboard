@@ -1,6 +1,7 @@
 using Colossal.Serialization.Entities;
 using Colossal.UI.Binding;
 using Game;
+using Game.Input;
 using Game.Prefabs;
 using Game.Rendering;
 using Game.SceneFlow;
@@ -9,13 +10,18 @@ using Game.UI;
 using Newtonsoft.Json;
 using PinIt.Data;
 using System.Linq;
+using Unity.Collections;
+using Unity.Entities;
 
 namespace PinIt.Systems
 {
     public partial class PinItUISystem : UISystemBase
     {
+        public static PinItUISystem Instance { get; private set; }
+
         private ToolSystem m_ToolSystem;
         private PrefabSystem m_PrefabSystem;
+        private ProxyAction m_TogglePanelAction;
 
         private FavouritesData m_Favourites;
         private bool m_Searched;
@@ -62,12 +68,16 @@ namespace PinIt.Systems
         protected override void OnCreate()
         {
             base.OnCreate();
+            Instance = this;
             Mod.log.Info("[PinIt] PinItUISystem created");
 
             m_ToolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
             m_PrefabSystem = World.GetOrCreateSystemManaged<PrefabSystem>();
 
             m_ToolSystem.EventPrefabChanged += OnPrefabChanged;
+
+            m_TogglePanelAction = Mod.Setting?.GetAction(Setting.kTogglePanelActionName);
+            if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = true;
 
             AddBinding(new TriggerBinding("pinIt", "togglePanel", OnTogglePanel));
             AddBinding(m_PanelOpenBinding = new ValueBinding<bool>("pinIt", "panelOpen", false));
@@ -277,7 +287,7 @@ namespace PinIt.Systems
                 m_CurrentPrefabType = prefab.GetType().Name;
                 m_CurrentPrefabThumbnail = ImageSystem.GetThumbnail(prefab) ?? "";
                 m_CurrentPrefabDisplayName = GetDisplayName(prefab);
-                Mod.log.Info($"[PinIt] Prefab selected: {m_CurrentPrefabName} -> \"{m_CurrentPrefabDisplayName}\"");
+                Mod.log.Info($"[PinIt] Prefab selected: {m_CurrentPrefabName} [{m_CurrentPrefabType}] -> \"{m_CurrentPrefabDisplayName}\"");
             }
 
             m_CurrentPrefabBinding.Update(m_CurrentPrefabDisplayName);
@@ -305,6 +315,12 @@ namespace PinIt.Systems
             Mod.log.Info($"[PinIt] PANEL {(m_PanelOpen ? "OPENED" : "CLOSED")}");
         }
 
+        private static readonly string[] s_CommonPrefabTypes =
+        {
+            "StaticObjectPrefab", "BuildingPrefab", "VegetationPrefab",
+            "PropPrefab", "ObjectGeometryPrefab", "MarkerObjectPrefab",
+        };
+
         private void OnSelectAsset(string name)
         {
             FavouriteEntry entry = null;
@@ -317,33 +333,60 @@ namespace PinIt.Systems
                 }
             }
 
-            if (entry != null && !string.IsNullOrEmpty(entry.Type))
+            // 1. Fast path — the type we stored when the asset was pinned.
+            if (entry != null && !string.IsNullOrEmpty(entry.Type) &&
+                m_PrefabSystem.TryGetPrefab(new PrefabID(entry.Type, name), out PrefabBase byStored))
             {
-                if (m_PrefabSystem.TryGetPrefab(new PrefabID(entry.Type, name), out PrefabBase prefab))
+                m_ToolSystem.ActivatePrefabTool(byStored);
+                Mod.log.Info($"[PinIt] Selected: {name} ({entry.Type})");
+                return;
+            }
+
+            // 2. Guess from the common placeable prefab types.
+            foreach (var typeName in s_CommonPrefabTypes)
+            {
+                if (m_PrefabSystem.TryGetPrefab(new PrefabID(typeName, name), out PrefabBase byGuess))
                 {
-                    m_ToolSystem.ActivatePrefabTool(prefab);
-                    Mod.log.Info($"[PinIt] Selected: {name} ({entry.Type})");
+                    HealStoredType(entry, typeName);
+                    m_ToolSystem.ActivatePrefabTool(byGuess);
+                    Mod.log.Info($"[PinIt] Selected (type fallback): {name} ({typeName})");
                     return;
                 }
             }
 
-            var typeNames = new[]
+            // 3. Definitive — scan every registered prefab and match by name,
+            //    so assets of any type (sculptures, custom ploppables, etc.) resolve.
+            var found = FindPrefabByName(name);
+            if (found != null)
             {
-                "StaticObjectPrefab", "BuildingPrefab", "VegetationPrefab",
-                "PropPrefab", "ObjectGeometryPrefab", "MarkerObjectPrefab",
-            };
-
-            foreach (var typeName in typeNames)
-            {
-                if (m_PrefabSystem.TryGetPrefab(new PrefabID(typeName, name), out PrefabBase prefab))
-                {
-                    m_ToolSystem.ActivatePrefabTool(prefab);
-                    Mod.log.Info($"[PinIt] Selected (fallback): {name} ({typeName})");
-                    return;
-                }
+                HealStoredType(entry, found.GetType().Name);
+                m_ToolSystem.ActivatePrefabTool(found);
+                Mod.log.Info($"[PinIt] Selected (name scan): {name} ({found.GetType().Name})");
+                return;
             }
 
             Mod.log.Info($"[PinIt] Asset not found: {name}");
+        }
+
+        // Scans all prefab entities and returns the one whose name matches.
+        private PrefabBase FindPrefabByName(string name)
+        {
+            var query = GetEntityQuery(ComponentType.ReadOnly<PrefabData>());
+            using var entities = query.ToEntityArray(Allocator.Temp);
+            foreach (var e in entities)
+            {
+                if (m_PrefabSystem.TryGetPrefab(e, out PrefabBase prefab) && prefab.name == name)
+                    return prefab;
+            }
+            return null;
+        }
+
+        // Persists the resolved type back onto the pin so future clicks take the fast path.
+        private void HealStoredType(FavouriteEntry entry, string type)
+        {
+            if (entry == null || entry.Type == type || string.IsNullOrEmpty(type)) return;
+            entry.Type = type;
+            FavouritesService.Save(m_Favourites);
         }
 
         // ── Push helpers ──────────────────────────────────────────────────────
@@ -376,19 +419,35 @@ namespace PinIt.Systems
             Mod.log.Info($"[PinIt] Loaded — {m_Favourites.Collections.Count} collections");
         }
 
+        // Called by the settings page after it edits favourites.json directly,
+        // so the live in-game panel reflects the change immediately.
+        public void ReloadFromDisk()
+        {
+            m_Favourites = FavouritesService.Load();
+            PushAll();
+            Mod.log.Info("[PinIt] Reloaded favourites from disk (settings edit)");
+        }
+
         protected override void OnUpdate()
         {
-            if (m_Searched || m_Favourites != null) return;
-            if (GameManager.instance?.gameMode != GameMode.Game &&
-                GameManager.instance?.gameMode != GameMode.Editor) return;
-            m_Searched = true;
-            LoadFavourites();
+            if (!m_Searched && m_Favourites == null &&
+                (GameManager.instance?.gameMode == GameMode.Game ||
+                 GameManager.instance?.gameMode == GameMode.Editor))
+            {
+                m_Searched = true;
+                LoadFavourites();
+            }
+
+            if (m_TogglePanelAction != null && m_TogglePanelAction.WasPerformedThisFrame())
+                OnTogglePanel();
         }
 
         protected override void OnDestroy()
         {
             m_ToolSystem.EventPrefabChanged -= OnPrefabChanged;
+            if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = false;
             if (m_Favourites != null) FavouritesService.Save(m_Favourites);
+            if (Instance == this) Instance = null;
             base.OnDestroy();
         }
     }

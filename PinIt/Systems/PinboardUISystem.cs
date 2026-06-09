@@ -8,16 +8,16 @@ using Game.SceneFlow;
 using Game.Tools;
 using Game.UI;
 using Newtonsoft.Json;
-using PinIt.Data;
+using Pinboard.Data;
 using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
 
-namespace PinIt.Systems
+namespace Pinboard.Systems
 {
-    public partial class PinItUISystem : UISystemBase
+    public partial class PinboardUISystem : UISystemBase
     {
-        public static PinItUISystem Instance { get; private set; }
+        public static PinboardUISystem Instance { get; private set; }
 
         private ToolSystem m_ToolSystem;
         private PrefabSystem m_PrefabSystem;
@@ -69,7 +69,7 @@ namespace PinIt.Systems
         {
             base.OnCreate();
             Instance = this;
-            Mod.log.Info("[PinIt] PinItUISystem created");
+            Mod.log.Info("[Pinboard] PinboardUISystem created");
 
             m_ToolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
             m_PrefabSystem = World.GetOrCreateSystemManaged<PrefabSystem>();
@@ -79,27 +79,27 @@ namespace PinIt.Systems
             m_TogglePanelAction = Mod.Setting?.GetAction(Setting.kTogglePanelActionName);
             if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = true;
 
-            AddBinding(new TriggerBinding("pinIt", "togglePanel", OnTogglePanel));
-            AddBinding(m_PanelOpenBinding = new ValueBinding<bool>("pinIt", "panelOpen", false));
-            AddBinding(m_CollectionsDataBinding = new ValueBinding<string>("pinIt", "collectionsData", "[]"));
-            AddBinding(m_ActiveCollectionIdBinding = new ValueBinding<string>("pinIt", "activeCollectionId", ""));
-            AddBinding(m_CurrentPrefabBinding = new ValueBinding<string>("pinIt", "currentPrefabName", ""));
-            AddBinding(m_CurrentPrefabIdBinding = new ValueBinding<string>("pinIt", "currentPrefabId", ""));
-            AddBinding(m_IsPinnedBinding = new ValueBinding<bool>("pinIt", "isPinned", false));
+            AddBinding(new TriggerBinding("pinboard", "togglePanel", OnTogglePanel));
+            AddBinding(m_PanelOpenBinding = new ValueBinding<bool>("pinboard", "panelOpen", false));
+            AddBinding(m_CollectionsDataBinding = new ValueBinding<string>("pinboard", "collectionsData", "[]"));
+            AddBinding(m_ActiveCollectionIdBinding = new ValueBinding<string>("pinboard", "activeCollectionId", ""));
+            AddBinding(m_CurrentPrefabBinding = new ValueBinding<string>("pinboard", "currentPrefabName", ""));
+            AddBinding(m_CurrentPrefabIdBinding = new ValueBinding<string>("pinboard", "currentPrefabId", ""));
+            AddBinding(m_IsPinnedBinding = new ValueBinding<bool>("pinboard", "isPinned", false));
 
-            AddBinding(new TriggerBinding<string>("pinIt", "selectAsset", OnSelectAsset));
-            AddBinding(new TriggerBinding("pinIt", "pinCurrentAsset", OnPinCurrentAsset));
-            AddBinding(new TriggerBinding("pinIt", "togglePin", OnTogglePin));
-            AddBinding(new TriggerBinding<string>("pinIt", "removeAsset", OnRemoveAsset));
-            AddBinding(new TriggerBinding<string>("pinIt", "setActiveCollection", OnSetActiveCollection));
-            AddBinding(new TriggerBinding<string>("pinIt", "createCollection", OnCreateCollection));
-            AddBinding(new TriggerBinding<string>("pinIt", "deleteCollection", OnDeleteCollection));
-            AddBinding(new TriggerBinding<string>("pinIt", "renameCollection", OnRenameCollection));
-            AddBinding(new TriggerBinding<string>("pinIt", "createFilter", OnCreateFilter));
-            AddBinding(new TriggerBinding<string>("pinIt", "deleteFilter", OnDeleteFilter));
-            AddBinding(new TriggerBinding<string>("pinIt", "renameFilter", OnRenameFilter));
-            AddBinding(new TriggerBinding<string>("pinIt", "addToFilter", OnAddToFilter));
-            AddBinding(new TriggerBinding<string>("pinIt", "removeFromFilter", OnRemoveFromFilter));
+            AddBinding(new TriggerBinding<string>("pinboard", "selectAsset", OnSelectAsset));
+            AddBinding(new TriggerBinding("pinboard", "pinCurrentAsset", OnPinCurrentAsset));
+            AddBinding(new TriggerBinding("pinboard", "togglePin", OnTogglePin));
+            AddBinding(new TriggerBinding<string>("pinboard", "removeAsset", OnRemoveAsset));
+            AddBinding(new TriggerBinding<string>("pinboard", "setActiveCollection", OnSetActiveCollection));
+            AddBinding(new TriggerBinding<string>("pinboard", "createCollection", OnCreateCollection));
+            AddBinding(new TriggerBinding<string>("pinboard", "deleteCollection", OnDeleteCollection));
+            AddBinding(new TriggerBinding<string>("pinboard", "renameCollection", OnRenameCollection));
+            AddBinding(new TriggerBinding<string>("pinboard", "createFilter", OnCreateFilter));
+            AddBinding(new TriggerBinding<string>("pinboard", "deleteFilter", OnDeleteFilter));
+            AddBinding(new TriggerBinding<string>("pinboard", "renameFilter", OnRenameFilter));
+            AddBinding(new TriggerBinding<string>("pinboard", "addToFilter", OnAddToFilter));
+            AddBinding(new TriggerBinding<string>("pinboard", "removeFromFilter", OnRemoveFromFilter));
         }
 
         // ── Collections ───────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ namespace PinIt.Systems
             FavouritesService.Save(m_Favourites);
             m_ActiveCollectionIdBinding.Update(id ?? "");
             UpdateIsPinned();
-            Mod.log.Info($"[PinIt] Active collection: {id}");
+            Mod.log.Info($"[Pinboard] Active collection: {id}");
         }
 
         private void OnCreateCollection(string name)
@@ -120,7 +120,7 @@ namespace PinIt.Systems
             FavouritesService.CreateCollection(m_Favourites, name.Trim());
             FavouritesService.Save(m_Favourites);
             PushCollectionsData();
-            Mod.log.Info($"[PinIt] Collection created: {name}");
+            Mod.log.Info($"[Pinboard] Collection created: {name}");
         }
 
         private void OnDeleteCollection(string id)
@@ -129,7 +129,7 @@ namespace PinIt.Systems
             FavouritesService.DeleteCollection(m_Favourites, id);
             FavouritesService.Save(m_Favourites);
             PushAll();
-            Mod.log.Info($"[PinIt] Collection deleted: {id}");
+            Mod.log.Info($"[Pinboard] Collection deleted: {id}");
         }
 
         private void OnRenameCollection(string payload)
@@ -152,7 +152,7 @@ namespace PinIt.Systems
             FavouritesService.CreateFilter(m_Favourites, p.CollectionId, (p.Name ?? "New Filter").Trim());
             FavouritesService.Save(m_Favourites);
             PushCollectionsData();
-            Mod.log.Info($"[PinIt] Filter created in {p.CollectionId}: {p.Name}");
+            Mod.log.Info($"[Pinboard] Filter created in {p.CollectionId}: {p.Name}");
         }
 
         private void OnDeleteFilter(string payload)
@@ -203,7 +203,7 @@ namespace PinIt.Systems
             var active = FavouritesService.GetActiveCollection(m_Favourites);
             if (active == null)
             {
-                Mod.log.Info("[PinIt] No active collection to pin into");
+                Mod.log.Info("[Pinboard] No active collection to pin into");
                 return;
             }
             if (active.Pins.Any(p => p.Name == m_CurrentPrefabName)) return;
@@ -219,7 +219,7 @@ namespace PinIt.Systems
             FavouritesService.Save(m_Favourites);
             PushCollectionsData();
             m_IsPinnedBinding.Update(true);
-            Mod.log.Info($"[PinIt] Pinned: {m_CurrentPrefabName} into '{active.Name}'");
+            Mod.log.Info($"[Pinboard] Pinned: {m_CurrentPrefabName} into '{active.Name}'");
         }
 
         private void OnTogglePin()
@@ -231,7 +231,7 @@ namespace PinIt.Systems
             if (active.Pins.Any(p => p.Name == m_CurrentPrefabName))
             {
                 FavouritesService.UnpinFromCollection(m_Favourites, active.Id, m_CurrentPrefabName);
-                Mod.log.Info($"[PinIt] Unpinned: {m_CurrentPrefabName} from '{active.Name}'");
+                Mod.log.Info($"[Pinboard] Unpinned: {m_CurrentPrefabName} from '{active.Name}'");
             }
             else
             {
@@ -242,7 +242,7 @@ namespace PinIt.Systems
                     Thumbnail = m_CurrentPrefabThumbnail,
                     DisplayName = m_CurrentPrefabDisplayName,
                 });
-                Mod.log.Info($"[PinIt] Pinned: {m_CurrentPrefabName} into '{active.Name}'");
+                Mod.log.Info($"[Pinboard] Pinned: {m_CurrentPrefabName} into '{active.Name}'");
             }
 
             FavouritesService.Save(m_Favourites);
@@ -259,7 +259,7 @@ namespace PinIt.Systems
             FavouritesService.Save(m_Favourites);
             PushCollectionsData();
             UpdateIsPinned();
-            Mod.log.Info($"[PinIt] Removed: {p.AssetName} from {p.CollectionId}");
+            Mod.log.Info($"[Pinboard] Removed: {p.AssetName} from {p.CollectionId}");
         }
 
         // ── Prefab tracking ───────────────────────────────────────────────────
@@ -287,7 +287,7 @@ namespace PinIt.Systems
                 m_CurrentPrefabType = prefab.GetType().Name;
                 m_CurrentPrefabThumbnail = ImageSystem.GetThumbnail(prefab) ?? "";
                 m_CurrentPrefabDisplayName = GetDisplayName(prefab);
-                Mod.log.Info($"[PinIt] Prefab selected: {m_CurrentPrefabName} [{m_CurrentPrefabType}] -> \"{m_CurrentPrefabDisplayName}\"");
+                Mod.log.Info($"[Pinboard] Prefab selected: {m_CurrentPrefabName} [{m_CurrentPrefabType}] -> \"{m_CurrentPrefabDisplayName}\"");
             }
 
             m_CurrentPrefabBinding.Update(m_CurrentPrefabDisplayName);
@@ -312,7 +312,7 @@ namespace PinIt.Systems
         {
             m_PanelOpen = !m_PanelOpen;
             m_PanelOpenBinding.Update(m_PanelOpen);
-            Mod.log.Info($"[PinIt] PANEL {(m_PanelOpen ? "OPENED" : "CLOSED")}");
+            Mod.log.Info($"[Pinboard] PANEL {(m_PanelOpen ? "OPENED" : "CLOSED")}");
         }
 
         private static readonly string[] s_CommonPrefabTypes =
@@ -338,7 +338,7 @@ namespace PinIt.Systems
                 m_PrefabSystem.TryGetPrefab(new PrefabID(entry.Type, name), out PrefabBase byStored))
             {
                 m_ToolSystem.ActivatePrefabTool(byStored);
-                Mod.log.Info($"[PinIt] Selected: {name} ({entry.Type})");
+                Mod.log.Info($"[Pinboard] Selected: {name} ({entry.Type})");
                 return;
             }
 
@@ -349,7 +349,7 @@ namespace PinIt.Systems
                 {
                     HealStoredType(entry, typeName);
                     m_ToolSystem.ActivatePrefabTool(byGuess);
-                    Mod.log.Info($"[PinIt] Selected (type fallback): {name} ({typeName})");
+                    Mod.log.Info($"[Pinboard] Selected (type fallback): {name} ({typeName})");
                     return;
                 }
             }
@@ -361,11 +361,11 @@ namespace PinIt.Systems
             {
                 HealStoredType(entry, found.GetType().Name);
                 m_ToolSystem.ActivatePrefabTool(found);
-                Mod.log.Info($"[PinIt] Selected (name scan): {name} ({found.GetType().Name})");
+                Mod.log.Info($"[Pinboard] Selected (name scan): {name} ({found.GetType().Name})");
                 return;
             }
 
-            Mod.log.Info($"[PinIt] Asset not found: {name}");
+            Mod.log.Info($"[Pinboard] Asset not found: {name}");
         }
 
         // Scans all prefab entities and returns the one whose name matches.
@@ -416,7 +416,7 @@ namespace PinIt.Systems
         {
             m_Favourites = FavouritesService.Load();
             PushAll();
-            Mod.log.Info($"[PinIt] Loaded — {m_Favourites.Collections.Count} collections");
+            Mod.log.Info($"[Pinboard] Loaded — {m_Favourites.Collections.Count} collections");
         }
 
         // Called by the settings page after it edits favourites.json directly,
@@ -425,7 +425,7 @@ namespace PinIt.Systems
         {
             m_Favourites = FavouritesService.Load();
             PushAll();
-            Mod.log.Info("[PinIt] Reloaded favourites from disk (settings edit)");
+            Mod.log.Info("[Pinboard] Reloaded favourites from disk (settings edit)");
         }
 
         protected override void OnUpdate()

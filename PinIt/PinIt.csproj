@@ -2,7 +2,13 @@
 
 	<PropertyGroup>
 		<Configurations>Debug;Release</Configurations>
-	
+
+		<!-- Mod is branded "Pinboard"; the project/solution files keep the legacy PinIt name.
+		     AssemblyName drives the output DLL, the deploy folder ($(LocalModsPath)\$(TargetName))
+		     and must match UI/mod.json "id" so the .dll and .mjs deploy together. -->
+		<AssemblyName>Pinboard</AssemblyName>
+		<RootNamespace>Pinboard</RootNamespace>
+
 		<!--The file where mod information which is required for publishing mod on PDX mods are stored-->
 		<PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
 	</PropertyGroup>
@@ -73,10 +79,11 @@
 		<None Include="$(ModTargetsFile)" Link="Properties\Mod.targets" />
 	</ItemGroup>
 
-	<!-- Copy pre-built UI JS into the deployed mod folder after DeployWIP. (CSS is injected by the .mjs via style-loader.) -->
-	<Target Name="DeployUI" AfterTargets="DeployWIP" Condition="Exists('UI\dist\PinIt.mjs')">
-		<Copy SourceFiles="UI\dist\PinIt.mjs" DestinationFolder="$(DeployDir)" />
-		<Message Text="[PinIt] Deployed UI\dist\PinIt.mjs to $(DeployDir)" Importance="high" />
+	<!-- Copy pre-built UI JS into the deployed mod folder after DeployWIP. (CSS is injected by the .mjs via style-loader.)
+	     The .mjs is named after $(TargetName) by webpack (via UI/mod.json "id"), so it matches the deployed DLL. -->
+	<Target Name="DeployUI" AfterTargets="DeployWIP" Condition="Exists('UI\dist\$(TargetName).mjs')">
+		<Copy SourceFiles="UI\dist\$(TargetName).mjs" DestinationFolder="$(DeployDir)" />
+		<Message Text="[Pinboard] Deployed UI\dist\$(TargetName).mjs to $(DeployDir)" Importance="high" />
 	</Target>
 
 </Project>

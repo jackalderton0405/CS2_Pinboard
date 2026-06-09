@@ -1,0 +1,4 @@
+.pinboard-scroll::-webkit-scrollbar { width: 6px; }
+.pinboard-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+.pinboard-scroll::-webkit-scrollbar-thumb { background: #555e6b; border-radius: 3px; }
+.pinboard-scroll::-webkit-scrollbar-thumb:hover { background: #7a8899; }

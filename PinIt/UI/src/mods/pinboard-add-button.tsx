@@ -3,7 +3,7 @@ import { trigger, useValue, bindValue } from "cs2/api";
 import { Button } from "cs2/ui";
 import { ModuleRegistryExtend } from "cs2/modding";
 import { VanillaComponentResolver } from "mods/VanillaComponentResolver/VanillaComponentResolver";
-import styles from "./pinit-add-button.module.css";
+import styles from "./pinboard-add-button.module.css";
 
 interface FilterData { id: string; name: string; assets: string[]; }
 interface CollectionData { id: string; name: string; pins: { name: string }[]; filters: FilterData[]; }
@@ -57,17 +57,17 @@ const ChevronRightIcon = () => (
 
 // ── Bindings ──────────────────────────────────────────────────────────────────
 
-const currentPrefabId$    = bindValue<string>("pinIt", "currentPrefabId", "");
-const isPinned$           = bindValue<boolean>("pinIt", "isPinned", false);
-const collectionsData$    = bindValue<string>("pinIt", "collectionsData", "[]");
-const activeCollectionId$ = bindValue<string>("pinIt", "activeCollectionId", "");
+const currentPrefabId$    = bindValue<string>("pinboard", "currentPrefabId", "");
+const isPinned$           = bindValue<boolean>("pinboard", "isPinned", false);
+const collectionsData$    = bindValue<string>("pinboard", "collectionsData", "[]");
+const activeCollectionId$ = bindValue<string>("pinboard", "activeCollectionId", "");
 
-const togglePin           = () => trigger("pinIt", "togglePin");
-const setActiveCollection = (id: string) => trigger("pinIt", "setActiveCollection", id);
+const togglePin           = () => trigger("pinboard", "togglePin");
+const setActiveCollection = (id: string) => trigger("pinboard", "setActiveCollection", id);
 const addToFilter    = (colId: string, filterId: string, asset: string) =>
-    trigger("pinIt", "addToFilter", JSON.stringify({ collectionId: colId, filterId, assetName: asset }));
+    trigger("pinboard", "addToFilter", JSON.stringify({ collectionId: colId, filterId, assetName: asset }));
 const removeFromFilter = (colId: string, filterId: string, asset: string) =>
-    trigger("pinIt", "removeFromFilter", JSON.stringify({ collectionId: colId, filterId, assetName: asset }));
+    trigger("pinboard", "removeFromFilter", JSON.stringify({ collectionId: colId, filterId, assetName: asset }));
 
 // ── Collections overlay panel ─────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ const CollectionsPanel = ({ collections, activeColId, currentPrefabId, bottom, l
         >
             {/* Header */}
             <div className={styles.header}>
-                <span className={styles.headerLabel}>PINIT</span>
+                <span className={styles.headerLabel}>PINBOARD</span>
                 <div className={styles.closeBtn} onClick={onClose}><CloseIcon /></div>
             </div>
 
@@ -154,7 +154,7 @@ const CollectionsPanel = ({ collections, activeColId, currentPrefabId, bottom, l
 
 // ── HOC ───────────────────────────────────────────────────────────────────────
 
-export const PinItToolOptionsWrapper: ModuleRegistryExtend = (Component: any) => {
+export const PinboardToolOptionsWrapper: ModuleRegistryExtend = (Component: any) => {
     return (props) => {
         const [overlayOpen, setOverlayOpen] = useState(false);
         const [panelBottom, setPanelBottom] = useState(0);
@@ -183,8 +183,8 @@ export const PinItToolOptionsWrapper: ModuleRegistryExtend = (Component: any) =>
 
         if (currentPrefabId) {
             result.props.children?.unshift(
-                <div key="pinit-section-wrap" ref={sectionRef}>
-                    <vcr.Section title="PinIt">
+                <div key="pinboard-section-wrap" ref={sectionRef}>
+                    <vcr.Section title="Pinboard">
                         <Button
                             variant="icon"
                             selected={isPinned}

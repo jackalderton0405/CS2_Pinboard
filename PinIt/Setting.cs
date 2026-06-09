@@ -6,21 +6,21 @@ using Game.Settings;
 using Game.UI.Localization;
 using Game.UI.Menu;
 using Game.UI.Widgets;
-using PinIt.Data;
-using PinIt.Systems;
+using Pinboard.Data;
+using Pinboard.Systems;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Entities;
 
-namespace PinIt
+namespace Pinboard
 {
-    [FileLocation(nameof(PinIt))]
-    [SettingsUIKeyboardAction(kTogglePanelActionName, ActionType.Button, usages: new[] { "PinIt", Usages.kDefaultUsage })]
+    [FileLocation(nameof(Pinboard))]
+    [SettingsUIKeyboardAction(kTogglePanelActionName, ActionType.Button, usages: new[] { "Pinboard", Usages.kDefaultUsage })]
     [SettingsUIGroupOrder(kKeybindGroup, kCollectionsGroup, kFiltersGroup)]
     [SettingsUIShowGroupName(kKeybindGroup, kCollectionsGroup, kFiltersGroup)]
     public class Setting : ModSetting
     {
-        public const string kTogglePanelActionName = "PinItTogglePanel";
+        public const string kTogglePanelActionName = "PinboardTogglePanel";
 
         public const string kSection = "Main";
         public const string kKeybindGroup = "Keybinding";
@@ -58,7 +58,7 @@ namespace PinIt
                 var data = FavouritesService.Load();
                 var col = data.Collections.FirstOrDefault(c => c.Id == m_SelectedCollectionId);
                 m_SelectedFilterId = col?.Filters.FirstOrDefault()?.Id ?? "";
-                Mod.log.Info($"[PinIt][Settings] Collection selected: {m_SelectedCollectionId}");
+                Mod.log.Info($"[Pinboard][Settings] Collection selected: {m_SelectedCollectionId}");
                 RefreshUI(); // rebuild the page so the Filter dropdown re-queries this collection
             }
         }
@@ -82,7 +82,7 @@ namespace PinIt
             set
             {
                 m_SelectedFilterId = value ?? "";
-                Mod.log.Info($"[PinIt][Settings] Filter selected: {m_SelectedFilterId}");
+                Mod.log.Info($"[Pinboard][Settings] Filter selected: {m_SelectedFilterId}");
             }
         }
 
@@ -105,7 +105,7 @@ namespace PinIt
                 .ToList();
             if (items.Count == 0)
                 items.Add(new DropdownItem<string> { value = "", displayName = LocalizedString.Value("(no collections)") });
-            Mod.log.Info($"[PinIt][Settings] GetCollectionItems -> {items.Count}");
+            Mod.log.Info($"[Pinboard][Settings] GetCollectionItems -> {items.Count}");
             return items.ToArray();
         }
 
@@ -119,7 +119,7 @@ namespace PinIt
                 .ToList();
             if (items.Count == 0)
                 items.Add(new DropdownItem<string> { value = "", displayName = LocalizedString.Value("(no filters)") });
-            Mod.log.Info($"[PinIt][Settings] GetFilterItems(col={col?.Name}) -> {items.Count}");
+            Mod.log.Info($"[Pinboard][Settings] GetFilterItems(col={col?.Name}) -> {items.Count}");
             return items.ToArray();
         }
 
@@ -128,26 +128,26 @@ namespace PinIt
         {
             var data = FavouritesService.Load();
             var col = data.Collections.FirstOrDefault(c => c.Id == m_SelectedCollectionId);
-            if (col == null) { Mod.log.Info("[PinIt][Settings] ClearCollection: none selected"); return; }
+            if (col == null) { Mod.log.Info("[Pinboard][Settings] ClearCollection: none selected"); return; }
             int pins = col.Pins.Count, filters = col.Filters.Count;
             col.Pins.Clear();
             col.Filters.Clear();
             Commit(data);
-            Mod.log.Info($"[PinIt][Settings] Cleared collection '{col.Name}' ({pins} pins, {filters} filters)");
+            Mod.log.Info($"[Pinboard][Settings] Cleared collection '{col.Name}' ({pins} pins, {filters} filters)");
         }
 
         private void DeleteCollection()
         {
             var data = FavouritesService.Load();
             var col = data.Collections.FirstOrDefault(c => c.Id == m_SelectedCollectionId);
-            if (col == null) { Mod.log.Info("[PinIt][Settings] DeleteCollection: none selected"); return; }
+            if (col == null) { Mod.log.Info("[Pinboard][Settings] DeleteCollection: none selected"); return; }
             FavouritesService.DeleteCollection(data, m_SelectedCollectionId);
             // Re-point selection at whatever remains.
             m_SelectedCollectionId = data.Collections.FirstOrDefault()?.Id ?? "";
             m_SelectedFilterId = data.Collections.FirstOrDefault(c => c.Id == m_SelectedCollectionId)?
                 .Filters.FirstOrDefault()?.Id ?? "";
             Commit(data);
-            Mod.log.Info($"[PinIt][Settings] Deleted collection '{col.Name}'");
+            Mod.log.Info($"[Pinboard][Settings] Deleted collection '{col.Name}'");
         }
 
         private void ClearFilter()
@@ -155,11 +155,11 @@ namespace PinIt
             var data = FavouritesService.Load();
             var col = data.Collections.FirstOrDefault(c => c.Id == m_SelectedCollectionId);
             var filter = col?.Filters.FirstOrDefault(f => f.Id == m_SelectedFilterId);
-            if (filter == null) { Mod.log.Info("[PinIt][Settings] ClearFilter: none selected"); return; }
+            if (filter == null) { Mod.log.Info("[Pinboard][Settings] ClearFilter: none selected"); return; }
             int assets = filter.Assets.Count;
             filter.Assets.Clear();
             Commit(data);
-            Mod.log.Info($"[PinIt][Settings] Cleared filter '{filter.Name}' ({assets} assets)");
+            Mod.log.Info($"[Pinboard][Settings] Cleared filter '{filter.Name}' ({assets} assets)");
         }
 
         private void DeleteFilter()
@@ -167,11 +167,11 @@ namespace PinIt
             var data = FavouritesService.Load();
             var col = data.Collections.FirstOrDefault(c => c.Id == m_SelectedCollectionId);
             var filter = col?.Filters.FirstOrDefault(f => f.Id == m_SelectedFilterId);
-            if (col == null || filter == null) { Mod.log.Info("[PinIt][Settings] DeleteFilter: none selected"); return; }
+            if (col == null || filter == null) { Mod.log.Info("[Pinboard][Settings] DeleteFilter: none selected"); return; }
             FavouritesService.DeleteFilter(data, col.Id, m_SelectedFilterId);
             m_SelectedFilterId = col.Filters.FirstOrDefault(f => f.Id != filter.Id)?.Id ?? "";
             Commit(data);
-            Mod.log.Info($"[PinIt][Settings] Deleted filter '{filter.Name}' from '{col.Name}'");
+            Mod.log.Info($"[Pinboard][Settings] Deleted filter '{filter.Name}' from '{col.Name}'");
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ namespace PinIt
         private void Commit(FavouritesData data)
         {
             FavouritesService.Save(data);
-            PinItUISystem.Instance?.ReloadFromDisk();
+            PinboardUISystem.Instance?.ReloadFromDisk();
             RefreshUI(); // rebuild the page so dropdowns re-query their (now changed) items
         }
 
@@ -190,7 +190,7 @@ namespace PinIt
         private void Refresh()
         {
             NormalizeSelection();
-            Mod.log.Info("[PinIt][Settings] Manual refresh requested");
+            Mod.log.Info("[Pinboard][Settings] Manual refresh requested");
             RefreshUI();
         }
 
@@ -207,18 +207,18 @@ namespace PinIt
             {
                 UnregisterInOptionsUI();
                 RegisterInOptionsUI();
-                Mod.log.Info("[PinIt][Settings] Options page re-registered (rebuild)");
+                Mod.log.Info("[Pinboard][Settings] Options page re-registered (rebuild)");
 
                 // Re-registering bounces the options menu off our page; navigate back.
                 try
                 {
                     var ou = World.DefaultGameObjectInjectionWorld?.GetExistingSystemManaged<OptionsUISystem>();
                     ou?.OpenPage(id, kSection, false);
-                    Mod.log.Info($"[PinIt][Settings] Reopened page id='{id}' section='{kSection}'");
+                    Mod.log.Info($"[Pinboard][Settings] Reopened page id='{id}' section='{kSection}'");
                 }
                 catch (System.Exception ex)
                 {
-                    Mod.log.Warn($"[PinIt][Settings] OpenPage failed: {ex.Message}");
+                    Mod.log.Warn($"[Pinboard][Settings] OpenPage failed: {ex.Message}");
                 }
             }
             finally { m_Refreshing = false; }
@@ -256,13 +256,13 @@ namespace PinIt
         {
             return new Dictionary<string, string>
             {
-                { m_Setting.GetSettingsLocaleID(), "PinIt" },
+                { m_Setting.GetSettingsLocaleID(), "Pinboard" },
 
                 // Keybinding
-                { m_Setting.GetBindingMapLocaleID(), "PinIt" },
-                { m_Setting.GetBindingKeyLocaleID(Setting.kTogglePanelActionName), "Toggle PinIt panel" },
+                { m_Setting.GetBindingMapLocaleID(), "Pinboard" },
+                { m_Setting.GetBindingKeyLocaleID(Setting.kTogglePanelActionName), "Toggle Pinboard panel" },
                 { m_Setting.GetOptionLabelLocaleID(nameof(Setting.TogglePanelKey)), "Toggle panel" },
-                { m_Setting.GetOptionDescLocaleID(nameof(Setting.TogglePanelKey)), "Keyboard shortcut to open and close the PinIt panel." },
+                { m_Setting.GetOptionDescLocaleID(nameof(Setting.TogglePanelKey)), "Keyboard shortcut to open and close the Pinboard panel." },
 
                 // Groups
                 { m_Setting.GetOptionGroupLocaleID(Setting.kKeybindGroup), "Keybinding" },

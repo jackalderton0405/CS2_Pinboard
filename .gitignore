@@ -11,7 +11,7 @@ Library/
 PinIt/UI/node_modules/
 # Ship the prebuilt bundle, ignore the rest of dist/
 PinIt/UI/dist/*
-!PinIt/UI/dist/PinIt.mjs
+!PinIt/UI/dist/Pinboard.mjs
 
 # ── Tooling / local settings ───────────────────────────────────
 .claude/

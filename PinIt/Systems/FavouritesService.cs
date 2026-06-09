@@ -1,22 +1,51 @@
 using Newtonsoft.Json;
-using PinIt.Data;
+using Pinboard.Data;
 using System;
 using System.IO;
 using UnityEngine;
 
-namespace PinIt.Systems
+namespace Pinboard.Systems
 {
     public static class FavouritesService
     {
         public static string SavePath => Path.Combine(
+            Application.persistentDataPath, "ModsData", "Pinboard", "favourites.json");
+
+        // The mod shipped as "PinIt" up to 1.0.1. Existing testers have their data
+        // under the old folder; migrate it once so the rename doesn't wipe their pins.
+        private static string LegacySavePath => Path.Combine(
             Application.persistentDataPath, "ModsData", "PinIt", "favourites.json");
 
         public static FavouritesData Load()
         {
+            MigrateLegacyDataIfNeeded();
             var data = TryLoad(SavePath) ?? TryLoad(SavePath + ".bak");
             data = data ?? new FavouritesData();
             EnsureDefaults(data);
             return data;
+        }
+
+        // One-time copy of the old PinIt save (and its .bak) into the new Pinboard
+        // folder. Only runs when the new file doesn't exist yet, so it never clobbers
+        // newer data and is a no-op for fresh installs and on every subsequent launch.
+        private static void MigrateLegacyDataIfNeeded()
+        {
+            try
+            {
+                if (File.Exists(SavePath)) return;          // already migrated or native install
+                if (!File.Exists(LegacySavePath)) return;   // nothing to migrate
+
+                Directory.CreateDirectory(Path.GetDirectoryName(SavePath));
+                File.Copy(LegacySavePath, SavePath, overwrite: false);
+                if (File.Exists(LegacySavePath + ".bak"))
+                    File.Copy(LegacySavePath + ".bak", SavePath + ".bak", overwrite: false);
+
+                Mod.log.Info($"[Pinboard] Migrated favourites from legacy PinIt folder: {LegacySavePath} -> {SavePath}");
+            }
+            catch (Exception ex)
+            {
+                Mod.log.Warn($"[Pinboard] Legacy data migration failed: {ex.Message}");
+            }
         }
 
         private static FavouritesData TryLoad(string path)
@@ -29,7 +58,7 @@ namespace PinIt.Systems
             }
             catch (Exception ex)
             {
-                Mod.log.Warn($"[PinIt] FavouritesService.TryLoad({path}) failed: {ex.Message}");
+                Mod.log.Warn($"[Pinboard] FavouritesService.TryLoad({path}) failed: {ex.Message}");
             }
             return null;
         }
@@ -64,7 +93,7 @@ namespace PinIt.Systems
             }
             catch (Exception ex)
             {
-                Mod.log.Error($"[PinIt] FavouritesService.Save failed: {ex}");
+                Mod.log.Error($"[Pinboard] FavouritesService.Save failed: {ex}");
             }
         }
 

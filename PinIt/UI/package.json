@@ -1,5 +1,5 @@
 {
-  "name": "pinit-ui",
+  "name": "pinboard-ui",
   "version": "1.0.0",
   "engines": {
     "node": ">=18"
@@ -7,7 +7,7 @@
   "scripts": {
     "build": "webpack",
     "dev": "webpack --watch",
-    "deploy": "webpack && xcopy /y dist\\PinIt.mjs \"%APPDATA%\\..\\LocalLow\\Colossal Order\\Cities Skylines II\\Mods\\PinIt\\\""
+    "deploy": "webpack && xcopy /y dist\\Pinboard.mjs \"%APPDATA%\\..\\LocalLow\\Colossal Order\\Cities Skylines II\\Mods\\Pinboard\\\""
   },
   "dependencies": {
     "react": "18.3.1",

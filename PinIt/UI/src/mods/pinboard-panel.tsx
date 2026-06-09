@@ -1,8 +1,8 @@
 import React, { useState, useRef } from "react";
 import { trigger, useValue, bindValue } from "cs2/api";
 import { ConfirmationDialog, Portal } from "cs2/ui";
-import styles from "./pinit-panel.module.css";
-import "./pinit-scrollbar.css";
+import styles from "./pinboard-panel.module.css";
+import "./pinboard-scrollbar.css";
 
 interface FavouriteEntry { name: string; type: string; thumbnail?: string; displayName?: string; }
 interface FilterData { id: string; name: string; assets: string[]; }
@@ -17,33 +17,33 @@ type Renaming =
   | { kind: "filter"; collectionId: string; filterId: string; value: string };
 
 // ── Bindings ──────────────────────────────────────────────────────────────────
-const panelOpen$        = bindValue<boolean>("pinIt", "panelOpen", false);
-const collectionsData$  = bindValue<string>("pinIt", "collectionsData", "[]");
-const currentPrefab$    = bindValue<string>("pinIt", "currentPrefabName", "");
-const currentPrefabId$  = bindValue<string>("pinIt", "currentPrefabId", "");
-const isPinned$         = bindValue<boolean>("pinIt", "isPinned", false);
+const panelOpen$        = bindValue<boolean>("pinboard", "panelOpen", false);
+const collectionsData$  = bindValue<string>("pinboard", "collectionsData", "[]");
+const currentPrefab$    = bindValue<string>("pinboard", "currentPrefabName", "");
+const currentPrefabId$  = bindValue<string>("pinboard", "currentPrefabId", "");
+const isPinned$         = bindValue<boolean>("pinboard", "isPinned", false);
 
 // ── Triggers ──────────────────────────────────────────────────────────────────
-const close = () => trigger("pinIt", "togglePanel");
-const selectAsset = (name: string) => trigger("pinIt", "selectAsset", name);
-const pinCurrentAsset = () => trigger("pinIt", "pinCurrentAsset");
+const close = () => trigger("pinboard", "togglePanel");
+const selectAsset = (name: string) => trigger("pinboard", "selectAsset", name);
+const pinCurrentAsset = () => trigger("pinboard", "pinCurrentAsset");
 const removeAsset = (collectionId: string, assetName: string) =>
-    trigger("pinIt", "removeAsset", JSON.stringify({ collectionId, assetName }));
-const setActiveCollection = (id: string) => trigger("pinIt", "setActiveCollection", id);
-const createCollection = (name: string) => trigger("pinIt", "createCollection", name);
-const deleteCollection = (id: string) => trigger("pinIt", "deleteCollection", id);
+    trigger("pinboard", "removeAsset", JSON.stringify({ collectionId, assetName }));
+const setActiveCollection = (id: string) => trigger("pinboard", "setActiveCollection", id);
+const createCollection = (name: string) => trigger("pinboard", "createCollection", name);
+const deleteCollection = (id: string) => trigger("pinboard", "deleteCollection", id);
 const renameCollection = (id: string, name: string) =>
-    trigger("pinIt", "renameCollection", JSON.stringify({ id, name }));
+    trigger("pinboard", "renameCollection", JSON.stringify({ id, name }));
 const createFilter = (collectionId: string, name: string) =>
-    trigger("pinIt", "createFilter", JSON.stringify({ collectionId, name }));
+    trigger("pinboard", "createFilter", JSON.stringify({ collectionId, name }));
 const deleteFilter = (collectionId: string, filterId: string) =>
-    trigger("pinIt", "deleteFilter", JSON.stringify({ collectionId, filterId }));
+    trigger("pinboard", "deleteFilter", JSON.stringify({ collectionId, filterId }));
 const renameFilter = (collectionId: string, filterId: string, name: string) =>
-    trigger("pinIt", "renameFilter", JSON.stringify({ collectionId, filterId, name }));
+    trigger("pinboard", "renameFilter", JSON.stringify({ collectionId, filterId, name }));
 const addToFilter = (collectionId: string, filterId: string, assetName: string) =>
-    trigger("pinIt", "addToFilter", JSON.stringify({ collectionId, filterId, assetName }));
+    trigger("pinboard", "addToFilter", JSON.stringify({ collectionId, filterId, assetName }));
 const removeFromFilter = (collectionId: string, filterId: string, assetName: string) =>
-    trigger("pinIt", "removeFromFilter", JSON.stringify({ collectionId, filterId, assetName }));
+    trigger("pinboard", "removeFromFilter", JSON.stringify({ collectionId, filterId, assetName }));
 
 // ── Brand colour (no game CSS variable equivalent) ────────────────────────────
 const GOLD     = "#c8a84b";
@@ -300,9 +300,9 @@ const FavouriteRow = ({ name, displayName, thumbnail, collectionId, filters, isE
     </div>
 );
 
-// ── PinItPanel ────────────────────────────────────────────────────────────────
+// ── PinboardPanel ────────────────────────────────────────────────────────────────
 
-export const PinItPanel = () => {
+export const PinboardPanel = () => {
     const isOpen           = useValue(panelOpen$);
     const collectionsJson  = useValue(collectionsData$);
     const currentPrefab    = useValue(currentPrefab$);
@@ -413,7 +413,7 @@ export const PinItPanel = () => {
             {/* ── Header ── */}
             <div className={`${styles.header} ${collapsed ? styles.headerCollapsed : ""}`}>
                 <PinIcon size="18rem" />
-                <span className={styles.headerTitle}>{"PinIt"}</span>
+                <span className={styles.headerTitle}>{"Pinboard"}</span>
 
                 {effectiveView === "collection" && currentPrefab && (
                     <div
@@ -439,7 +439,7 @@ export const PinItPanel = () => {
                 <>
                     <div className={styles.sectionBar}>{"COLLECTIONS"}</div>
 
-                    <div ref={colListRef} onWheel={handleColWheel} className={`${styles.scrollArea} pinit-scroll`}>
+                    <div ref={colListRef} onWheel={handleColWheel} className={`${styles.scrollArea} pinboard-scroll`}>
                         {collections.length === 0 && (
                             <div className={styles.emptyState}>{"No collections yet."}</div>
                         )}
@@ -577,7 +577,7 @@ export const PinItPanel = () => {
                     </div>
 
                     {/* Pin list */}
-                    <div ref={listRef} onWheel={handleWheel} className={`${styles.scrollArea} pinit-scroll`}>
+                    <div ref={listRef} onWheel={handleWheel} className={`${styles.scrollArea} pinboard-scroll`}>
                         {sorted.length === 0 ? (
                             <div className={styles.emptyState}>
                                 {query ? "No matches." : viewFilterId ? "No pins in this filter." : "No pins yet."}

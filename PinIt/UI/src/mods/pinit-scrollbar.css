@@ -1,4 +1,0 @@
-.pinit-scroll::-webkit-scrollbar { width: 6px; }
-.pinit-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-.pinit-scroll::-webkit-scrollbar-thumb { background: #555e6b; border-radius: 3px; }
-.pinit-scroll::-webkit-scrollbar-thumb:hover { background: #7a8899; }

@@ -60,21 +60,21 @@ The mod is a C# backend plus a TypeScript/React UI.
 **Build the UI**
 
 ```powershell
-cd PinIt/UI
+cd Pinboard/UI
 npm install
 npm run build      # outputs dist/Pinboard.mjs
 ```
 
 **Build the mod**
 
-Open `PinIt.slnx` in Visual Studio and build, or run `dotnet build`. The build's `DeployUI` step copies the prebuilt `Pinboard.mjs` into the deployed mod folder. For quick UI-only iteration, `npm run deploy` rebuilds and copies just the `.mjs` to your Mods folder.
+Open `Pinboard.slnx` in Visual Studio and build, or run `dotnet build`. The build's `DeployUI` step copies the prebuilt `Pinboard.mjs` into the deployed mod folder. For quick UI-only iteration, `npm run deploy` rebuilds and copies just the `.mjs` to your Mods folder.
 
 > No hot-reload — restart the game after any change.
 
 ## Project layout
 
 ```
-PinIt/
+Pinboard/
 ├── Data/FavouritesData.cs        Data model (collections, filters, pins)
 ├── Systems/
 │   ├── FavouritesService.cs      JSON load/save + CRUD

@@ -8,10 +8,10 @@ Library/
 *.user
 
 # ── UI (Node / webpack) ────────────────────────────────────────
-PinIt/UI/node_modules/
+Pinboard/UI/node_modules/
 # Ship the prebuilt bundle, ignore the rest of dist/
-PinIt/UI/dist/*
-!PinIt/UI/dist/Pinboard.mjs
+Pinboard/UI/dist/*
+!Pinboard/UI/dist/Pinboard.mjs
 
 # ── Tooling / local settings ───────────────────────────────────
 .claude/

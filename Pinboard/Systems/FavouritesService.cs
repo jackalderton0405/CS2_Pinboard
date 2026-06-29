@@ -65,6 +65,11 @@ namespace Pinboard.Systems
 
         private static void EnsureDefaults(FavouritesData data)
         {
+            // Older save files (pre-1.2.0) have no "recentlyPlaced" key; the property
+            // initializer covers a missing key, this guards an explicit null in the JSON.
+            if (data.RecentlyPlaced == null)
+                data.RecentlyPlaced = new System.Collections.Generic.List<FavouriteEntry>();
+
             if (data.Collections.Count == 0)
             {
                 var col = new CollectionData { Name = "New Collection" };
@@ -177,6 +182,26 @@ namespace Pinboard.Systems
         {
             var col = data.Collections.Find(c => c.Id == collectionId);
             col?.Filters.Find(f => f.Id == filterId)?.Assets.Remove(assetName);
+        }
+
+        // ── Recently placed (auto-managed, capped) ────────────────────────────
+
+        public const int RecentlyPlacedCap = 100;
+
+        // Records a placement: dedupes by name (so re-placing bumps to the top
+        // rather than duplicating) and trims the list to the cap, newest first.
+        public static void RecordPlacement(FavouritesData data, FavouriteEntry entry)
+        {
+            if (data == null || entry == null || string.IsNullOrEmpty(entry.Name)) return;
+            data.RecentlyPlaced.RemoveAll(p => p.Name == entry.Name);
+            data.RecentlyPlaced.Insert(0, entry);
+            if (data.RecentlyPlaced.Count > RecentlyPlacedCap)
+                data.RecentlyPlaced.RemoveRange(RecentlyPlacedCap, data.RecentlyPlaced.Count - RecentlyPlacedCap);
+        }
+
+        public static void ClearRecentlyPlaced(FavouritesData data)
+        {
+            data?.RecentlyPlaced.Clear();
         }
     }
 }

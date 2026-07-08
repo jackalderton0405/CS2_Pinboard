@@ -112,6 +112,9 @@
   background-color: var(--menuPanel1);
   flex-shrink: 0;
 }
+/* Push trailing action (Clear) to the far right, away from the breadcrumb. */
+.sectionBarFlexBetween { justify-content: space-between; }
+.breadcrumbGroup { display: flex; align-items: center; gap: 6rem; min-width: 0; }
 
 /* ── Breadcrumb ──────────────────────────────────────────────────────────── */
 .breadcrumbLink { color: var(--menuText2Normal); cursor: pointer; }
@@ -142,6 +145,9 @@
 .collectionRow:hover { background-color: var(--menuHoverColor); }
 .collectionRowRenaming { cursor: default; }
 
+/* Nudge the leading folder/clock icon off the collection name (gap alone is too tight) */
+.collectionRow > svg:first-child { margin-right: 4rem; }
+
 .collectionName { flex: 1; font-size: 16rem; color: var(--menuText1Normal); }
 
 .collectionCount {
@@ -156,32 +162,44 @@
   padding: 2rem 7rem;
 }
 
-/* action icons — hidden until row hovered */
-.rowActions { display: flex; gap: 0; }
+/* action icons — always in flow (fixed width) so count/chevron never shift on hover */
+.rowActions {
+  display: flex;
+  gap: 0;
+  width: 44rem;
+  flex-shrink: 0;
+  justify-content: flex-end;
+}
 .collectionRow .rowActions         { opacity: 0; pointer-events: none; }
 .collectionRow:hover .rowActions   { opacity: 1; pointer-events: auto; }
-.collectionRowRenaming .rowActions { display: none; }
+.collectionRowRenaming .rowActions { visibility: hidden; }
+
+/* Matches .rowActions width so rows without action buttons (Recently Placed)
+   keep their badge + chevron aligned with the collection rows below. */
+.rowActionsSpacer { width: 44rem; flex-shrink: 0; }
 
 /* ── Recently Placed folder (auto-managed) ───────────────────────────────── */
 /* Distinguished by the clock icon + gold label only — no persistent
    background so it doesn't read as a "selected" row. */
-.recentFolderRow .collectionName { color: #c8a84b; font-weight: bold; }
+.recentFolderRow .collectionName { color: var(--menuText1Normal); font-weight: bold; }
+/* Separate the system row from user collections: keep the divider line but add
+   breathing space below so the whitespace signals the boundary. */
+.recentFolderRow { margin-bottom: 6rem; }
 
 .clearRecentBtn {
-  margin-left: auto;
   flex-shrink: 0;
-  background-color: rgba(200,168,75,0.15);
-  border: 1px solid #c8a84b;
+  background-color: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
   border-radius: 4rem;
   padding: 4rem 14rem;
   font-size: 11rem;
-  font-weight: bold;
-  color: #c8a84b;
+  font-weight: 600;
+  color: var(--menuText1Normal);
   cursor: pointer;
 }
 .clearRecentBtn:hover {
-  background-color: rgba(200,168,75,0.3);
-  color: #e3cd83;
+  background-color: rgba(255,255,255,0.13);
+  border-color: rgba(255,255,255,0.28);
 }
 
 /* ── Icon buttons ────────────────────────────────────────────────────────── */
@@ -432,3 +450,33 @@
 }
 .checkboxRow:hover  { background-color: var(--menuHoverColor); }
 .checkboxRowChecked { color: var(--menuText1Normal); }
+
+/* ── Recently Placed pin picker (two-level: collection → lists) ───────────── */
+.pickCol { display: flex; flex-direction: column; }
+
+.pickColHeader {
+  display: flex; align-items: center; gap: 6rem;
+  padding: 6rem 8rem; cursor: pointer; border-radius: 4rem;
+  font-size: 13rem; color: var(--menuText1Normal);
+  user-select: none;
+}
+.pickColHeader:hover { background-color: var(--menuHoverColor); }
+.pickColName {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Gold dot: asset is already pinned somewhere inside this collection */
+.pickColDot {
+  width: 6rem; height: 6rem; border-radius: 50%;
+  background-color: #c8a84b; flex-shrink: 0;
+}
+
+/* Lists indented under their collection */
+.pickSubList {
+  display: flex; flex-direction: column; gap: 2rem;
+  padding: 2rem 0 4rem 22rem;
+}
+.pickNoLists {
+  padding: 4rem 10rem; font-size: 12rem;
+  color: var(--menuText1Disabled); font-style: italic;
+}

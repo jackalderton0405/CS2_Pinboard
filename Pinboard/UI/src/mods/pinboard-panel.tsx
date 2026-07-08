@@ -323,50 +323,105 @@ interface RecentRowProps {
     onTogglePick: () => void;
 }
 
-const RecentRow = ({ entry, collections, isPicking, onTogglePick }: RecentRowProps) => (
-    <div className={styles.favRow}>
-        <div className={styles.favRowInner}>
-            {entry.thumbnail ? (
-                <img src={entry.thumbnail} className={styles.favThumb} />
-            ) : (
-                <div className={styles.favThumbEmpty}>{"?"}</div>
-            )}
-            <span onClick={() => selectAsset(entry.name)} className={styles.favName}>
-                {entry.displayName || entry.name}
-            </span>
+const RecentRow = ({ entry, collections, isPicking, onTogglePick }: RecentRowProps) => {
+    // Which collection's lists are expanded inside the picker (one at a time).
+    const [expandedCol, setExpandedCol] = useState<string | null>(null);
 
-            <button
-                onClick={e => { e.stopPropagation(); onTogglePick(); }}
-                title="Pin to collection"
-                className={`${styles.favActionBtn} ${isPicking ? styles.favActionBtnActive : ""}`}
-            >
-                <PinIcon size="13rem" />
-            </button>
-        </div>
+    // Pin the asset into one of a collection's lists. A list is a subset of its
+    // collection, so ensure the asset is in the collection root first, then add
+    // it to the list. Unchecking only removes it from the list (stays pinned).
+    const toggleList = (col: CollectionData, filter: FilterData, inList: boolean, inCol: boolean) => {
+        if (inList) {
+            removeFromFilter(col.id, filter.id, entry.name);
+        } else {
+            if (!inCol) pinFromRecent(col.id, entry.name);
+            addToFilter(col.id, filter.id, entry.name);
+        }
+    };
 
-        {isPicking && (
-            <div className={styles.checkboxList}>
-                {collections.length === 0 ? (
-                    <div className={styles.emptyState}>{"No collections to pin into."}</div>
-                ) : collections.map(col => {
-                    const inCol = col.pins.some(p => p.name === entry.name);
-                    return (
-                        <div
-                            key={col.id}
-                            onClick={() => inCol
-                                ? removeAsset(col.id, entry.name)
-                                : pinFromRecent(col.id, entry.name)}
-                            className={`${styles.checkboxRow} ${inCol ? styles.checkboxRowChecked : ""}`}
-                        >
-                            {inCol ? <CheckboxChecked /> : <CheckboxUnchecked />}
-                            <span>{col.name}</span>
-                        </div>
-                    );
-                })}
+    return (
+        <div className={styles.favRow}>
+            <div className={styles.favRowInner}>
+                {entry.thumbnail ? (
+                    <img src={entry.thumbnail} className={styles.favThumb} />
+                ) : (
+                    <div className={styles.favThumbEmpty}>{"?"}</div>
+                )}
+                <span onClick={() => selectAsset(entry.name)} className={styles.favName}>
+                    {entry.displayName || entry.name}
+                </span>
+
+                <button
+                    onClick={e => { e.stopPropagation(); onTogglePick(); }}
+                    title="Pin to collection or list"
+                    className={`${styles.favActionBtn} ${isPicking ? styles.favActionBtnActive : ""}`}
+                >
+                    <PinIcon size="13rem" />
+                </button>
             </div>
-        )}
-    </div>
-);
+
+            {isPicking && (
+                <div className={styles.checkboxList}>
+                    {collections.length === 0 ? (
+                        <div className={styles.emptyState}>{"No collections to pin into."}</div>
+                    ) : collections.map(col => {
+                        const inCol       = col.pins.some(p => p.name === entry.name);
+                        const inAnyList   = col.filters.some(f => f.assets.includes(entry.name));
+                        const isColOpen   = expandedCol === col.id;
+                        return (
+                            <div key={col.id} className={styles.pickCol}>
+                                <div
+                                    className={styles.pickColHeader}
+                                    onClick={() => setExpandedCol(isColOpen ? null : col.id)}
+                                >
+                                    {isColOpen
+                                        ? <ChevronDownIcon size="11rem" opacity={0.55} />
+                                        : <ChevronRightIcon size="11rem" opacity={0.55} />}
+                                    <span className={styles.pickColName}>{col.name}</span>
+                                    {(inCol || inAnyList) && <span className={styles.pickColDot} />}
+                                </div>
+
+                                {isColOpen && (
+                                    <div className={styles.pickSubList}>
+                                        {/* Pin to the collection root */}
+                                        <div
+                                            onClick={() => inCol
+                                                ? removeAsset(col.id, entry.name)
+                                                : pinFromRecent(col.id, entry.name)}
+                                            className={`${styles.checkboxRow} ${inCol ? styles.checkboxRowChecked : ""}`}
+                                        >
+                                            {inCol ? <CheckboxChecked /> : <CheckboxUnchecked />}
+                                            <span>{"Whole collection"}</span>
+                                        </div>
+
+                                        {/* Pin to a specific list within the collection */}
+                                        {col.filters.map(filter => {
+                                            const inList = filter.assets.includes(entry.name);
+                                            return (
+                                                <div
+                                                    key={filter.id}
+                                                    onClick={() => toggleList(col, filter, inList, inCol)}
+                                                    className={`${styles.checkboxRow} ${inList ? styles.checkboxRowChecked : ""}`}
+                                                >
+                                                    {inList ? <CheckboxChecked /> : <CheckboxUnchecked />}
+                                                    <span>{filter.name}</span>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {col.filters.length === 0 && (
+                                            <div className={styles.pickNoLists}>{"No lists in this collection"}</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
 
 // ── PinboardPanel ────────────────────────────────────────────────────────────────
 
@@ -535,6 +590,7 @@ export const PinboardPanel = () => {
                             <span className={styles.collectionCount}>
                                 {recentEntries.length} {recentEntries.length === 1 ? "item" : "items"}
                             </span>
+                            <div className={styles.rowActionsSpacer} />
                             <ChevronRightIcon size="12rem" opacity={0.35} />
                         </div>
 
@@ -704,10 +760,12 @@ export const PinboardPanel = () => {
             {!collapsed && effectiveView === "recent" && (
                 <>
                     {/* Breadcrumb + clear */}
-                    <div className={styles.sectionBarFlex}>
-                        <span className={styles.breadcrumbLink} onClick={navigateRoot}>{"Collections"}</span>
-                        <ChevronRightIcon size="9rem" opacity={0.4} />
-                        <span className={styles.breadcrumbCurrent}>{"Recently Placed"}</span>
+                    <div className={`${styles.sectionBarFlex} ${styles.sectionBarFlexBetween}`}>
+                        <div className={styles.breadcrumbGroup}>
+                            <span className={styles.breadcrumbLink} onClick={navigateRoot}>{"Collections"}</span>
+                            <ChevronRightIcon size="9rem" opacity={0.4} />
+                            <span className={styles.breadcrumbCurrent}>{"Recently Placed"}</span>
+                        </div>
                         {recentEntries.length > 0 && (
                             <button
                                 className={styles.clearRecentBtn}

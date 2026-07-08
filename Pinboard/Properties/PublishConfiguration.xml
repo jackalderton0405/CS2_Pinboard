@@ -10,19 +10,18 @@
 	<LongDescription>
 # Pinboard
 
-A quality-of-life mod that lets you favourite ("pin") any asset and organise your pins into named collections and filters, so the assets you actually use are always a click away instead of buried in the build menus.
+A quality-of-life mod that allows you to pin any asset and organize your pins into named collections and filters, so the assets you actually use are always a click away instead of buried in the build menus.
 
 ## Features
 
-- **Pin any asset** — buildings, props, trees, network pieces and more. Pin the selected asset straight from the tool options panel, or remove it just as quickly.
-- **Collections** — group your pins into as many named collections as you like (e.g. Downtown, Suburbs, Industrial).
-- **Filters** — within a collection, create funnel-style filters to slice your pins into sub-groups. A pin can belong to multiple filters.
-- **Quick access panel** — a floating button opens the Pinboard panel; click any pin to instantly activate that asset's placement tool.
-- **Search and sort** — filter your pins by name and sort A-Z / Z-A.
-- **Tool-options integration** — pin the selected asset and assign it to filters directly from the in-game tool options.
-- **Persistent and safe** — your pins are saved to disk with atomic writes and automatic backup recovery, separate from your save games.
+- **Pin any asset:** Buildings, props, trees, network pieces, and more. Pin the selected asset straight from the tool options panel, or remove it just as quickly.
+- **Collections:** Group your pins into as many named collections as you like (e.g. Downtown, Suburbs, Industrial).
+- **Filters:** within a collection, create funnel-style filters to slice your pins into sub-groups. A pin can belong to multiple filters.
+- **Recently Placed:** A built-in, auto-managed list at the top of the panel that tracks assets as you build with them, so you never lose track of what you just used. Pin any recent item straight into a collection or a specific filter.
+- **Quick access panel:** A floating button opens the Pinboard panel and click any pin to instantly activate that asset's placement tool.
+- **Search and sort:** Filter your pins by name and sort A-Z / Z-A.
 
-This is a beta release — feedback and bug reports are very welcome.
+I made this mod for myself, as I am the type of player that has a tonne of custom assets but always go back to a select few across multiple builds and wanted some sort of favourite filing collection. As a little disclaimer I have little experience coding, but my partner, who does code and Claude helped build this. I have done a quick test on the 1.6.0f1 patch and against popular mods and have not seen any issues but any feedback is appreciated!
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />
@@ -33,7 +32,7 @@ This is a beta release — feedback and bug reports are very welcome.
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.1.0" />
+	<ModVersion Value="1.2.0" />
 	<!--Recommended version of the base game to use the mod-->
 	<GameVersion Value="1.0.*" />
 	<!--Dependency for the mod, can be set multiple times-->
@@ -42,10 +41,11 @@ This is a beta release — feedback and bug reports are very welcome.
 	<RequiredDLC Value="" />
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
 	<ChangeLog>
-# 1.1.0
+# 1.2.0
 
-- Renamed: the mod is now called **Pinboard** (previously "PinIt"). Your existing pins, collections and filters carry over automatically — nothing to do on your end.
-- The keyboard shortcut to toggle the panel resets to its default (Ctrl+B); rebind it in Options &gt; Keybindings if you'd customised it.
+- **New: Recently Placed** — a built-in, auto-managed collection at the top of the panel that tracks assets as you build with them, so you never lose track of what you just used.
+- Pin any Recently Placed item into a collection or a specific list from an inline picker, then clear the list whenever you like.
+- UI polish: clearer separation for the Recently Placed row, aligned pin-count badges that no longer shift on hover, and tidier icon spacing.
 	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<ExternalLink Type="github" Url="https://github.com/jackalderton0405/CS2_PinIt" />

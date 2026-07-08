@@ -22,6 +22,7 @@ const collectionsData$  = bindValue<string>("pinboard", "collectionsData", "[]")
 const currentPrefab$    = bindValue<string>("pinboard", "currentPrefabName", "");
 const currentPrefabId$  = bindValue<string>("pinboard", "currentPrefabId", "");
 const isPinned$         = bindValue<boolean>("pinboard", "isPinned", false);
+const recentlyPlaced$   = bindValue<string>("pinboard", "recentlyPlacedData", "[]");
 
 // ── Triggers ──────────────────────────────────────────────────────────────────
 const close = () => trigger("pinboard", "togglePanel");
@@ -44,6 +45,9 @@ const addToFilter = (collectionId: string, filterId: string, assetName: string) 
     trigger("pinboard", "addToFilter", JSON.stringify({ collectionId, filterId, assetName }));
 const removeFromFilter = (collectionId: string, filterId: string, assetName: string) =>
     trigger("pinboard", "removeFromFilter", JSON.stringify({ collectionId, filterId, assetName }));
+const pinFromRecent = (collectionId: string, assetName: string) =>
+    trigger("pinboard", "pinFromRecent", JSON.stringify({ collectionId, assetName }));
+const clearRecent = () => trigger("pinboard", "clearRecent");
 
 // ── Brand colour (no game CSS variable equivalent) ────────────────────────────
 const GOLD     = "#c8a84b";
@@ -78,6 +82,13 @@ const SearchIcon = ({ size = "14rem", opacity = 1 }: { size?: string; opacity?: 
     <svg style={svgStyle(size, opacity)} viewBox="0 0 24 24" fill="none">
         <circle cx="10.5" cy="10.5" r="6.5" stroke="white" strokeWidth="2"/>
         <path d="M15.5 15.5L20 20" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
+    </svg>
+);
+
+const ClockIcon = ({ size = "14rem", opacity = 1 }: { size?: string; opacity?: number }) => (
+    <svg style={svgStyle(size, opacity)} viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="1.8"/>
+        <path d="M12 7v5l3.5 2" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
 );
 
@@ -300,6 +311,118 @@ const FavouriteRow = ({ name, displayName, thumbnail, collectionId, filters, isE
     </div>
 );
 
+// ── RecentRow ─────────────────────────────────────────────────────────────────
+// A read-only row in the auto-managed "Recently Placed" list. Clicking the name
+// re-selects the asset; the pin button opens an inline picker to copy it into one
+// of the real collections (toggling membership, like the filter checkboxes).
+
+interface RecentRowProps {
+    entry: FavouriteEntry;
+    collections: CollectionData[];
+    isPicking: boolean;
+    onTogglePick: () => void;
+}
+
+const RecentRow = ({ entry, collections, isPicking, onTogglePick }: RecentRowProps) => {
+    // Which collection's lists are expanded inside the picker (one at a time).
+    const [expandedCol, setExpandedCol] = useState<string | null>(null);
+
+    // Pin the asset into one of a collection's lists. A list is a subset of its
+    // collection, so ensure the asset is in the collection root first, then add
+    // it to the list. Unchecking only removes it from the list (stays pinned).
+    const toggleList = (col: CollectionData, filter: FilterData, inList: boolean, inCol: boolean) => {
+        if (inList) {
+            removeFromFilter(col.id, filter.id, entry.name);
+        } else {
+            if (!inCol) pinFromRecent(col.id, entry.name);
+            addToFilter(col.id, filter.id, entry.name);
+        }
+    };
+
+    return (
+        <div className={styles.favRow}>
+            <div className={styles.favRowInner}>
+                {entry.thumbnail ? (
+                    <img src={entry.thumbnail} className={styles.favThumb} />
+                ) : (
+                    <div className={styles.favThumbEmpty}>{"?"}</div>
+                )}
+                <span onClick={() => selectAsset(entry.name)} className={styles.favName}>
+                    {entry.displayName || entry.name}
+                </span>
+
+                <button
+                    onClick={e => { e.stopPropagation(); onTogglePick(); }}
+                    title="Pin to collection or list"
+                    className={`${styles.favActionBtn} ${isPicking ? styles.favActionBtnActive : ""}`}
+                >
+                    <PinIcon size="13rem" />
+                </button>
+            </div>
+
+            {isPicking && (
+                <div className={styles.checkboxList}>
+                    {collections.length === 0 ? (
+                        <div className={styles.emptyState}>{"No collections to pin into."}</div>
+                    ) : collections.map(col => {
+                        const inCol       = col.pins.some(p => p.name === entry.name);
+                        const inAnyList   = col.filters.some(f => f.assets.includes(entry.name));
+                        const isColOpen   = expandedCol === col.id;
+                        return (
+                            <div key={col.id} className={styles.pickCol}>
+                                <div
+                                    className={styles.pickColHeader}
+                                    onClick={() => setExpandedCol(isColOpen ? null : col.id)}
+                                >
+                                    {isColOpen
+                                        ? <ChevronDownIcon size="11rem" opacity={0.55} />
+                                        : <ChevronRightIcon size="11rem" opacity={0.55} />}
+                                    <span className={styles.pickColName}>{col.name}</span>
+                                    {(inCol || inAnyList) && <span className={styles.pickColDot} />}
+                                </div>
+
+                                {isColOpen && (
+                                    <div className={styles.pickSubList}>
+                                        {/* Pin to the collection root */}
+                                        <div
+                                            onClick={() => inCol
+                                                ? removeAsset(col.id, entry.name)
+                                                : pinFromRecent(col.id, entry.name)}
+                                            className={`${styles.checkboxRow} ${inCol ? styles.checkboxRowChecked : ""}`}
+                                        >
+                                            {inCol ? <CheckboxChecked /> : <CheckboxUnchecked />}
+                                            <span>{"Whole collection"}</span>
+                                        </div>
+
+                                        {/* Pin to a specific list within the collection */}
+                                        {col.filters.map(filter => {
+                                            const inList = filter.assets.includes(entry.name);
+                                            return (
+                                                <div
+                                                    key={filter.id}
+                                                    onClick={() => toggleList(col, filter, inList, inCol)}
+                                                    className={`${styles.checkboxRow} ${inList ? styles.checkboxRowChecked : ""}`}
+                                                >
+                                                    {inList ? <CheckboxChecked /> : <CheckboxUnchecked />}
+                                                    <span>{filter.name}</span>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {col.filters.length === 0 && (
+                                            <div className={styles.pickNoLists}>{"No lists in this collection"}</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
 // ── PinboardPanel ────────────────────────────────────────────────────────────────
 
 export const PinboardPanel = () => {
@@ -308,11 +431,14 @@ export const PinboardPanel = () => {
     const currentPrefab    = useValue(currentPrefab$);
     const currentPrefabId  = useValue(currentPrefabId$);
     const isPinned         = useValue(isPinned$);
+    const recentJson       = useValue(recentlyPlaced$);
 
-    const [panelView, setPanelView]         = useState<"root" | "collection">("root");
+    const [panelView, setPanelView]         = useState<"root" | "collection" | "recent">("root");
     const [viewCollectionId, setViewColId]  = useState<string | null>(null);
     const [viewFilterId, setViewFilterId]   = useState<string | null>(null);
     const [expandedRow, setExpandedRow]     = useState<string | null>(null);
+    const [pickingRecent, setPickingRecent] = useState<string | null>(null);
+    const [pendingClearRecent, setPendingClearRecent] = useState(false);
     const [searchText, setSearchText]       = useState("");
     const [collapsed, setCollapsed]         = useState(false);
     const [sortDir, setSortDir]             = useState<"asc" | "desc" | null>(null);
@@ -330,6 +456,9 @@ export const PinboardPanel = () => {
 
     let collections: CollectionData[] = [];
     try { collections = JSON.parse(collectionsJson); } catch {}
+
+    let recentEntries: FavouriteEntry[] = [];
+    try { recentEntries = JSON.parse(recentJson); } catch {}
 
     const viewCollection = panelView === "collection"
         ? (collections.find(c => c.id === viewCollectionId) ?? null)
@@ -350,6 +479,17 @@ export const PinboardPanel = () => {
         setPanelView("root");
         setViewFilterId(null);
         setExpandedRow(null);
+        setSearchText("");
+        setSortDir(null);
+        setPickingRecent(null);
+    };
+
+    const navigateRecent = () => {
+        setPanelView("recent");
+        setViewColId(null);
+        setViewFilterId(null);
+        setExpandedRow(null);
+        setPickingRecent(null);
         setSearchText("");
         setSortDir(null);
     };
@@ -440,6 +580,20 @@ export const PinboardPanel = () => {
                     <div className={styles.sectionBar}>{"COLLECTIONS"}</div>
 
                     <div ref={colListRef} onWheel={handleColWheel} className={`${styles.scrollArea} pinboard-scroll`}>
+                        {/* Auto-managed "Recently Placed" folder, pinned at the top */}
+                        <div
+                            className={`${styles.collectionRow} ${styles.recentFolderRow}`}
+                            onClick={navigateRecent}
+                        >
+                            <ClockIcon size="15rem" opacity={0.85} />
+                            <span className={styles.collectionName}>{"Recently Placed"}</span>
+                            <span className={styles.collectionCount}>
+                                {recentEntries.length} {recentEntries.length === 1 ? "item" : "items"}
+                            </span>
+                            <div className={styles.rowActionsSpacer} />
+                            <ChevronRightIcon size="12rem" opacity={0.35} />
+                        </div>
+
                         {collections.length === 0 && (
                             <div className={styles.emptyState}>{"No collections yet."}</div>
                         )}
@@ -601,6 +755,46 @@ export const PinboardPanel = () => {
                     </div>
                 </>
             )}
+
+            {/* ── Recently Placed view ── */}
+            {!collapsed && effectiveView === "recent" && (
+                <>
+                    {/* Breadcrumb + clear */}
+                    <div className={`${styles.sectionBarFlex} ${styles.sectionBarFlexBetween}`}>
+                        <div className={styles.breadcrumbGroup}>
+                            <span className={styles.breadcrumbLink} onClick={navigateRoot}>{"Collections"}</span>
+                            <ChevronRightIcon size="9rem" opacity={0.4} />
+                            <span className={styles.breadcrumbCurrent}>{"Recently Placed"}</span>
+                        </div>
+                        {recentEntries.length > 0 && (
+                            <button
+                                className={styles.clearRecentBtn}
+                                onClick={() => setPendingClearRecent(true)}
+                            >{"Clear"}</button>
+                        )}
+                    </div>
+
+                    <div ref={listRef} onWheel={handleWheel} className={`${styles.scrollArea} pinboard-scroll`}>
+                        {recentEntries.length === 0 ? (
+                            <div className={styles.emptyState}>
+                                {"Nothing placed yet. Assets you build with will appear here."}
+                            </div>
+                        ) : (
+                            <div className={styles.pinList}>
+                                {recentEntries.map(entry => (
+                                    <RecentRow
+                                        key={entry.name}
+                                        entry={entry}
+                                        collections={collections}
+                                        isPicking={pickingRecent === entry.name}
+                                        onTogglePick={() => setPickingRecent(pickingRecent === entry.name ? null : entry.name)}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
         </div>
 
         {/* ── Confirmation dialog — native game dialog, portaled out of the overflow:hidden panel ── */}
@@ -616,6 +810,21 @@ export const PinboardPanel = () => {
                     multiline={true}
                     onConfirm={() => confirmDelete()}
                     onCancel={() => setPendingDelete(null)}
+                />
+            </Portal>
+        )}
+
+        {/* ── Clear Recently Placed confirmation ── */}
+        {pendingClearRecent && (
+            <Portal>
+                <ConfirmationDialog
+                    title={"Clear Recently Placed"}
+                    message={"Clear the entire Recently Placed list? Your collections and pins are not affected."}
+                    confirm={"Clear"}
+                    cancel={"Cancel"}
+                    multiline={true}
+                    onConfirm={() => { clearRecent(); setPendingClearRecent(false); }}
+                    onCancel={() => setPendingClearRecent(false)}
                 />
             </Portal>
         )}

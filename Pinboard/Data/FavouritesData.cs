@@ -53,5 +53,10 @@ namespace Pinboard.Data
 
         [JsonProperty("activeCollectionId")]
         public string ActiveCollectionId { get; set; }
+
+        // Auto-managed list of the most recently placed assets (newest first, capped).
+        // Added in 1.2.0 — a new key, so older save files load untouched.
+        [JsonProperty("recentlyPlaced")]
+        public List<FavouriteEntry> RecentlyPlaced { get; set; } = new List<FavouriteEntry>();
     }
 }

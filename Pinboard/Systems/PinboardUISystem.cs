@@ -38,6 +38,7 @@ namespace Pinboard.Systems
         private ValueBinding<string> m_CurrentPrefabBinding;
         private ValueBinding<string> m_CurrentPrefabIdBinding;
         private ValueBinding<bool> m_IsPinnedBinding;
+        private ValueBinding<string> m_RecentlyPlacedBinding;
 
         private class RemoveAssetPayload
         {
@@ -65,6 +66,12 @@ namespace Pinboard.Systems
             [JsonProperty("assetName")] public string AssetName { get; set; }
         }
 
+        private class PinFromRecentPayload
+        {
+            [JsonProperty("collectionId")] public string CollectionId { get; set; }
+            [JsonProperty("assetName")] public string AssetName { get; set; }
+        }
+
         protected override void OnCreate()
         {
             base.OnCreate();
@@ -75,6 +82,7 @@ namespace Pinboard.Systems
             m_PrefabSystem = World.GetOrCreateSystemManaged<PrefabSystem>();
 
             m_ToolSystem.EventPrefabChanged += OnPrefabChanged;
+            ToolBaseSystem.EventToolActionPerformed += OnToolActionPerformed;
 
             m_TogglePanelAction = Mod.Setting?.GetAction(Setting.kTogglePanelActionName);
             if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = true;
@@ -86,6 +94,7 @@ namespace Pinboard.Systems
             AddBinding(m_CurrentPrefabBinding = new ValueBinding<string>("pinboard", "currentPrefabName", ""));
             AddBinding(m_CurrentPrefabIdBinding = new ValueBinding<string>("pinboard", "currentPrefabId", ""));
             AddBinding(m_IsPinnedBinding = new ValueBinding<bool>("pinboard", "isPinned", false));
+            AddBinding(m_RecentlyPlacedBinding = new ValueBinding<string>("pinboard", "recentlyPlacedData", "[]"));
 
             AddBinding(new TriggerBinding<string>("pinboard", "selectAsset", OnSelectAsset));
             AddBinding(new TriggerBinding("pinboard", "pinCurrentAsset", OnPinCurrentAsset));
@@ -100,6 +109,66 @@ namespace Pinboard.Systems
             AddBinding(new TriggerBinding<string>("pinboard", "renameFilter", OnRenameFilter));
             AddBinding(new TriggerBinding<string>("pinboard", "addToFilter", OnAddToFilter));
             AddBinding(new TriggerBinding<string>("pinboard", "removeFromFilter", OnRemoveFromFilter));
+            AddBinding(new TriggerBinding<string>("pinboard", "pinFromRecent", OnPinFromRecent));
+            AddBinding(new TriggerBinding("pinboard", "clearRecent", OnClearRecent));
+        }
+
+        // ── Recently placed ───────────────────────────────────────────────────
+
+        // Fired (static event) whenever any tool input action reaches Performed.
+        // We act only on the "Apply" action — the click that commits a placement —
+        // and only when a placeable asset is active in the tool.
+        private void OnToolActionPerformed(ProxyAction action)
+        {
+            if (action == null || action.name != "Apply") return;
+            if (m_Favourites == null || string.IsNullOrEmpty(m_CurrentPrefabName)) return;
+
+            // Skip if this asset is already the most recent — avoids redundant
+            // saves while dragging out a brush of the same prefab.
+            if (m_Favourites.RecentlyPlaced.Count > 0 &&
+                m_Favourites.RecentlyPlaced[0].Name == m_CurrentPrefabName)
+                return;
+
+            FavouritesService.RecordPlacement(m_Favourites, new FavouriteEntry
+            {
+                Name = m_CurrentPrefabName,
+                Type = m_CurrentPrefabType,
+                Thumbnail = m_CurrentPrefabThumbnail,
+                DisplayName = m_CurrentPrefabDisplayName,
+            });
+            FavouritesService.Save(m_Favourites);
+            PushRecentlyPlaced();
+            Mod.log.Info($"[Pinboard] Placed: {m_CurrentPrefabName}");
+        }
+
+        private void OnPinFromRecent(string payload)
+        {
+            if (m_Favourites == null) return;
+            var p = JsonConvert.DeserializeObject<PinFromRecentPayload>(payload);
+            if (p == null) return;
+            var entry = m_Favourites.RecentlyPlaced.FirstOrDefault(e => e.Name == p.AssetName);
+            if (entry == null) return;
+
+            FavouritesService.PinToCollection(m_Favourites, p.CollectionId, new FavouriteEntry
+            {
+                Name = entry.Name,
+                Type = entry.Type,
+                Thumbnail = entry.Thumbnail,
+                DisplayName = entry.DisplayName,
+            });
+            FavouritesService.Save(m_Favourites);
+            PushCollectionsData();
+            UpdateIsPinned();
+            Mod.log.Info($"[Pinboard] Pinned from recent: {p.AssetName} -> {p.CollectionId}");
+        }
+
+        private void OnClearRecent()
+        {
+            if (m_Favourites == null) return;
+            FavouritesService.ClearRecentlyPlaced(m_Favourites);
+            FavouritesService.Save(m_Favourites);
+            PushRecentlyPlaced();
+            Mod.log.Info("[Pinboard] Recently placed cleared");
         }
 
         // ── Collections ───────────────────────────────────────────────────────
@@ -396,9 +465,15 @@ namespace Pinboard.Systems
             m_CollectionsDataBinding.Update(JsonConvert.SerializeObject(m_Favourites.Collections));
         }
 
+        private void PushRecentlyPlaced()
+        {
+            m_RecentlyPlacedBinding.Update(JsonConvert.SerializeObject(m_Favourites.RecentlyPlaced));
+        }
+
         private void PushAll()
         {
             PushCollectionsData();
+            PushRecentlyPlaced();
             m_ActiveCollectionIdBinding.Update(m_Favourites.ActiveCollectionId ?? "");
             UpdateIsPinned();
         }
@@ -445,6 +520,7 @@ namespace Pinboard.Systems
         protected override void OnDestroy()
         {
             m_ToolSystem.EventPrefabChanged -= OnPrefabChanged;
+            ToolBaseSystem.EventToolActionPerformed -= OnToolActionPerformed;
             if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = false;
             if (m_Favourites != null) FavouritesService.Save(m_Favourites);
             if (Instance == this) Instance = null;

@@ -270,7 +270,7 @@ namespace Pinboard
                 { m_Setting.GetOptionGroupLocaleID(Setting.kFiltersGroup), "Filters" },
 
                 // Collection widgets
-                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.InfoText)), "Note: clearing, deleting or refreshing reloads this page, which briefly returns you to the top of the options menu. This is normal — your change has been applied." },
+                { m_Setting.GetOptionLabelLocaleID(nameof(Setting.InfoText)), "Note: newly created collections and filters may not appear here right away. Use Refresh Lists to update the dropdowns." },
                 { m_Setting.GetOptionLabelLocaleID(nameof(Setting.RefreshButton)), "Refresh lists" },
                 { m_Setting.GetOptionDescLocaleID(nameof(Setting.RefreshButton)), "Reload collections and filters to reflect changes made in the in-game panel." },
                 { m_Setting.GetOptionLabelLocaleID(nameof(Setting.SelectedCollectionId)), "Collection" },

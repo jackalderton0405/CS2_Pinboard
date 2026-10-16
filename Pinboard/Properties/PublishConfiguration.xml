@@ -21,7 +21,7 @@ A quality-of-life mod that allows you to pin any asset and organize your pins in
 - **Quick access panel:** A floating button opens the Pinboard panel and click any pin to instantly activate that asset's placement tool.
 - **Search and sort:** Filter your pins by name and sort A-Z / Z-A.
 
-I made this mod for myself, as I am the type of player that has a tonne of custom assets but always go back to a select few across multiple builds and wanted some sort of favourite filing collection. As a little disclaimer I have little experience coding, but my partner, who does code and Claude helped build this. I have done a quick test on the 1.6.0f1 patch and against popular mods and have not seen any issues but any feedback is appreciated!
+I made this mod for myself, as I am the type of player that has a tonne of custom assets but always go back to a select few across multiple builds and wanted some sort of favourite filing collection. As a little disclaimer I have little experience coding, but my partner, who does code and Claude helped build this. I have done a quick test on the 1.6.2f1 patch and against popular mods and have not seen any issues but any feedback is appreciated!
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />
@@ -32,15 +32,19 @@ I made this mod for myself, as I am the type of player that has a tonne of custo
 	<!--Link to the forum post where the mod can be discussed-->
 	<ForumLink Value="" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.2.0" />
+	<ModVersion Value="1.2.1" />
 	<!--Recommended version of the base game to use the mod-->
-	<GameVersion Value="1.0.*" />
+	<GameVersion Value="1.6.*" />
 	<!--Dependency for the mod, can be set multiple times-->
 	<!--<Dependency Id="" />-->
 	<!--Required DLC, can be set multiple times. Supported values are "Landmark Buildings", "San Fransisco Set", "Beach Properties", "Urban Promenades", "Modern Architecture"-->
 	<RequiredDLC Value="" />
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
 	<ChangeLog>
+# 1.2.1
+
+- Recompiled and updated for the Cities: Skylines II 1.6.2f1 patch. No functional changes.
+
 # 1.2.0
 
 - **New: Recently Placed** — a built-in, auto-managed collection at the top of the panel that tracks assets as you build with them, so you never lose track of what you just used.

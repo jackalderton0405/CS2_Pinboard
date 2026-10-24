@@ -3,34 +3,50 @@ using Colossal.UI.Binding;
 using Game;
 using Game.Input;
 using Game.Prefabs;
-using Game.Rendering;
-using Game.SceneFlow;
 using Game.Tools;
 using Game.UI;
 using Newtonsoft.Json;
 using Pinboard.Data;
-using System.Linq;
-using Unity.Collections;
-using Unity.Entities;
+using System;
+using System.Collections.Generic;
 
 namespace Pinboard.Systems
 {
+    // The game side of Pinboard. It holds the player's pins, talks to the panel
+    // through bindings, and watches what the player picks up and places.
+    //
+    // The class is split over several files, one per job:
+    //   PinboardUISystem.cs              this file: state, bindings, loading and saving
+    //   PinboardUISystem.Messages.cs     the shapes of the messages the panel sends
+    //   PinboardUISystem.Assets.cs       finding assets in the game, picking them up
+    //   PinboardUISystem.Tracking.cs     the held asset, Recently Placed, Most Used
+    //   PinboardUISystem.Collections.cs  collections and filters
+    //   PinboardUISystem.Pins.cs         pinning, quick pins, the info panel section
+    //   PinboardUISystem.Sharing.cs      share codes
+    //   PinboardUISystem.Layout.cs       the panel's position, view and sort order
+    //   PinboardUISystem.Districts.cs    "pin everything in a district"
     public partial class PinboardUISystem : UISystemBase
     {
         public static PinboardUISystem Instance { get; private set; }
 
+        // Every binding lives in this group. It must match the panel code (UI/src/mods/game.ts),
+        // and is different from Pinboard 1.x ("pinboard") so the two can never mix.
+        private const string kGroup = "pinboard2";
+
+        // Name length limits, enforced here as well as in the UI so the save file
+        // stays sane whatever sends us a message.
+        private const int kMaxCollectionNameLength = 30;
+        private const int kMaxFilterNameLength = 20;
+
         private ToolSystem m_ToolSystem;
         private PrefabSystem m_PrefabSystem;
         private ProxyAction m_TogglePanelAction;
+        private ProxyAction m_PinCurrentAction;
+        private readonly List<ProxyAction> m_QuickPickActions = new List<ProxyAction>();
 
+        // The player's pins, collections and lists. Null until a city or the editor has loaded.
         private FavouritesData m_Favourites;
-        private bool m_Searched;
         private bool m_PanelOpen;
-
-        private string m_CurrentPrefabName = "";
-        private string m_CurrentPrefabType = "";
-        private string m_CurrentPrefabThumbnail = "";
-        private string m_CurrentPrefabDisplayName = "";
 
         private ValueBinding<bool> m_PanelOpenBinding;
         private ValueBinding<string> m_CollectionsDataBinding;
@@ -39,44 +55,22 @@ namespace Pinboard.Systems
         private ValueBinding<string> m_CurrentPrefabIdBinding;
         private ValueBinding<bool> m_IsPinnedBinding;
         private ValueBinding<string> m_RecentlyPlacedBinding;
+        private ValueBinding<string> m_MostUsedBinding;
+        private ValueBinding<string> m_QuickPinsBinding;
+        private ValueBinding<string> m_MissingAssetBinding;
+        private ValueBinding<string> m_MissingAssetSourceBinding;
+        private ValueBinding<string> m_InspectedBinding;
+        private ValueBinding<string> m_PanelLayoutBinding;
+        private ValueBinding<string> m_NoticeBinding;
+        private ValueBinding<string> m_ShareCodeBinding;
 
-        private class RemoveAssetPayload
-        {
-            [JsonProperty("collectionId")] public string CollectionId { get; set; }
-            [JsonProperty("assetName")] public string AssetName { get; set; }
-        }
-
-        private class RenamePayload
-        {
-            [JsonProperty("id")] public string Id { get; set; }
-            [JsonProperty("name")] public string Name { get; set; }
-        }
-
-        private class FilterActionPayload
-        {
-            [JsonProperty("collectionId")] public string CollectionId { get; set; }
-            [JsonProperty("filterId")] public string FilterId { get; set; }
-            [JsonProperty("name")] public string Name { get; set; }
-        }
-
-        private class FilterMemberPayload
-        {
-            [JsonProperty("collectionId")] public string CollectionId { get; set; }
-            [JsonProperty("filterId")] public string FilterId { get; set; }
-            [JsonProperty("assetName")] public string AssetName { get; set; }
-        }
-
-        private class PinFromRecentPayload
-        {
-            [JsonProperty("collectionId")] public string CollectionId { get; set; }
-            [JsonProperty("assetName")] public string AssetName { get; set; }
-        }
+        // Each notice gets a new number so the panel can tell two identical ones apart.
+        private int m_NoticeCounter;
 
         protected override void OnCreate()
         {
             base.OnCreate();
             Instance = this;
-            Mod.log.Info("[Pinboard] PinboardUISystem created");
 
             m_ToolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
             m_PrefabSystem = World.GetOrCreateSystemManaged<PrefabSystem>();
@@ -84,447 +78,240 @@ namespace Pinboard.Systems
             m_ToolSystem.EventPrefabChanged += OnPrefabChanged;
             ToolBaseSystem.EventToolActionPerformed += OnToolActionPerformed;
 
-            m_TogglePanelAction = Mod.Setting?.GetAction(Setting.kTogglePanelActionName);
-            if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = true;
+            m_TogglePanelAction = EnableAction(Setting.kTogglePanelActionName);
+            m_PinCurrentAction = EnableAction(Setting.kPinCurrentActionName);
+            foreach (var name in Setting.kQuickPickActions)
+                m_QuickPickActions.Add(EnableAction(name));
 
-            AddBinding(new TriggerBinding("pinboard", "togglePanel", OnTogglePanel));
-            AddBinding(m_PanelOpenBinding = new ValueBinding<bool>("pinboard", "panelOpen", false));
-            AddBinding(m_CollectionsDataBinding = new ValueBinding<string>("pinboard", "collectionsData", "[]"));
-            AddBinding(m_ActiveCollectionIdBinding = new ValueBinding<string>("pinboard", "activeCollectionId", ""));
-            AddBinding(m_CurrentPrefabBinding = new ValueBinding<string>("pinboard", "currentPrefabName", ""));
-            AddBinding(m_CurrentPrefabIdBinding = new ValueBinding<string>("pinboard", "currentPrefabId", ""));
-            AddBinding(m_IsPinnedBinding = new ValueBinding<bool>("pinboard", "isPinned", false));
-            AddBinding(m_RecentlyPlacedBinding = new ValueBinding<string>("pinboard", "recentlyPlacedData", "[]"));
+            // What the panel shows.
+            m_PanelOpenBinding = AddValue("panelOpen", false);
+            m_CollectionsDataBinding = AddValue("collectionsData", "[]");
+            m_ActiveCollectionIdBinding = AddValue("activeCollectionId", "");
+            m_CurrentPrefabBinding = AddValue("currentPrefabName", "");
+            m_CurrentPrefabIdBinding = AddValue("currentPrefabId", "");
+            m_IsPinnedBinding = AddValue("isPinned", false);
+            m_RecentlyPlacedBinding = AddValue("recentlyPlacedData", "[]");
+            m_MostUsedBinding = AddValue("mostUsedData", "[]");
+            m_QuickPinsBinding = AddValue("quickPinsData", "[]");
+            m_MissingAssetBinding = AddValue("missingAsset", "");
+            m_MissingAssetSourceBinding = AddValue("missingAssetSource", "");
+            m_InspectedBinding = AddValue("inspected", "");
+            m_PanelLayoutBinding = AddValue("panelLayout", PanelLayoutJson());
+            m_NoticeBinding = AddValue("notice", "");
+            m_ShareCodeBinding = AddValue("shareCode", "");
 
-            AddBinding(new TriggerBinding<string>("pinboard", "selectAsset", OnSelectAsset));
-            AddBinding(new TriggerBinding("pinboard", "pinCurrentAsset", OnPinCurrentAsset));
-            AddBinding(new TriggerBinding("pinboard", "togglePin", OnTogglePin));
-            AddBinding(new TriggerBinding<string>("pinboard", "removeAsset", OnRemoveAsset));
-            AddBinding(new TriggerBinding<string>("pinboard", "setActiveCollection", OnSetActiveCollection));
-            AddBinding(new TriggerBinding<string>("pinboard", "createCollection", OnCreateCollection));
-            AddBinding(new TriggerBinding<string>("pinboard", "deleteCollection", OnDeleteCollection));
-            AddBinding(new TriggerBinding<string>("pinboard", "renameCollection", OnRenameCollection));
-            AddBinding(new TriggerBinding<string>("pinboard", "createFilter", OnCreateFilter));
-            AddBinding(new TriggerBinding<string>("pinboard", "deleteFilter", OnDeleteFilter));
-            AddBinding(new TriggerBinding<string>("pinboard", "renameFilter", OnRenameFilter));
-            AddBinding(new TriggerBinding<string>("pinboard", "addToFilter", OnAddToFilter));
-            AddBinding(new TriggerBinding<string>("pinboard", "removeFromFilter", OnRemoveFromFilter));
-            AddBinding(new TriggerBinding<string>("pinboard", "pinFromRecent", OnPinFromRecent));
-            AddBinding(new TriggerBinding("pinboard", "clearRecent", OnClearRecent));
+            // What the panel asks for. The handlers are in the file for each job.
+            AddBinding(new TriggerBinding(kGroup, "togglePanel", OnTogglePanel));
+            AddBinding(new TriggerBinding<string>(kGroup, "selectAsset", OnSelectAsset));
+            AddBinding(new TriggerBinding(kGroup, "dismissMissingAsset", () => m_MissingAssetBinding.Update("")));
+
+            AddBinding(new TriggerBinding<string>(kGroup, "pinCurrentAsset", OnPinCurrentAsset));
+            AddBinding(new TriggerBinding(kGroup, "togglePin", OnTogglePin));
+            AddBinding(new TriggerBinding<string>(kGroup, "pinFromRecent", OnPinInto));
+            AddBinding(new TriggerBinding<string>(kGroup, "removeAsset", OnRemoveAsset));
+            AddBinding(new TriggerBinding<string>(kGroup, "restorePin", OnRestorePin));
+            AddBinding(new TriggerBinding<string>(kGroup, "movePin", OnMovePin));
+            AddBinding(new TriggerBinding<string>(kGroup, "copyPin", OnCopyPin));
+
+            AddBinding(new TriggerBinding<string>(kGroup, "setActiveCollection", OnSetActiveCollection));
+            AddBinding(new TriggerBinding<string>(kGroup, "createCollection", OnCreateCollection));
+            AddBinding(new TriggerBinding<string>(kGroup, "deleteCollection", OnDeleteCollection));
+            AddBinding(new TriggerBinding<string>(kGroup, "renameCollection", OnRenameCollection));
+            AddBinding(new TriggerBinding<string>(kGroup, "moveCollection", OnMoveCollection));
+
+            AddBinding(new TriggerBinding<string>(kGroup, "createFilter", OnCreateFilter));
+            AddBinding(new TriggerBinding<string>(kGroup, "deleteFilter", OnDeleteFilter));
+            AddBinding(new TriggerBinding<string>(kGroup, "renameFilter", OnRenameFilter));
+            AddBinding(new TriggerBinding<string>(kGroup, "addToFilter", OnAddToFilter));
+            AddBinding(new TriggerBinding<string>(kGroup, "removeFromFilter", OnRemoveFromFilter));
+
+            AddBinding(new TriggerBinding(kGroup, "clearRecent", OnClearRecent));
+            AddBinding(new TriggerBinding(kGroup, "clearMostUsed", OnClearMostUsed));
+
+            AddBinding(new TriggerBinding<string>(kGroup, "setQuickPin", OnSetQuickPin));
+            AddBinding(new TriggerBinding<int>(kGroup, "clearQuickPin", OnClearQuickPin));
+            AddBinding(new TriggerBinding<string>(kGroup, "moveQuickPin", OnMoveQuickPin));
+
+            AddBinding(new TriggerBinding<string>(kGroup, "exportCollection", OnExportCollection));
+            AddBinding(new TriggerBinding<string>(kGroup, "importCollection", OnImportCollection));
+            AddBinding(new TriggerBinding(kGroup, "dismissShareCode", () => m_ShareCodeBinding.Update("")));
+
+            AddBinding(new TriggerBinding<string>(kGroup, "savePanelPosition", OnSavePanelPosition));
+            AddBinding(new TriggerBinding<bool>(kGroup, "setGridView", OnSetGridView));
+            AddBinding(new TriggerBinding<string>(kGroup, "setSortMode", OnSetSortMode));
+
+            CreateDistrictBindings();
         }
 
-        // ── Recently placed ───────────────────────────────────────────────────
-
-        // Fired (static event) whenever any tool input action reaches Performed.
-        // We act only on the "Apply" action — the click that commits a placement —
-        // and only when a placeable asset is active in the tool.
-        private void OnToolActionPerformed(ProxyAction action)
+        private ValueBinding<T> AddValue<T>(string name, T initial)
         {
-            if (action == null || action.name != "Apply") return;
-            if (m_Favourites == null || string.IsNullOrEmpty(m_CurrentPrefabName)) return;
-
-            // Skip if this asset is already the most recent — avoids redundant
-            // saves while dragging out a brush of the same prefab.
-            if (m_Favourites.RecentlyPlaced.Count > 0 &&
-                m_Favourites.RecentlyPlaced[0].Name == m_CurrentPrefabName)
-                return;
-
-            FavouritesService.RecordPlacement(m_Favourites, new FavouriteEntry
-            {
-                Name = m_CurrentPrefabName,
-                Type = m_CurrentPrefabType,
-                Thumbnail = m_CurrentPrefabThumbnail,
-                DisplayName = m_CurrentPrefabDisplayName,
-            });
-            FavouritesService.Save(m_Favourites);
-            PushRecentlyPlaced();
-            Mod.log.Info($"[Pinboard] Placed: {m_CurrentPrefabName}");
+            var binding = new ValueBinding<T>(kGroup, name, initial);
+            AddBinding(binding);
+            return binding;
         }
 
-        private void OnPinFromRecent(string payload)
+        private static ProxyAction EnableAction(string name)
         {
-            if (m_Favourites == null) return;
-            var p = JsonConvert.DeserializeObject<PinFromRecentPayload>(payload);
-            if (p == null) return;
-            var entry = m_Favourites.RecentlyPlaced.FirstOrDefault(e => e.Name == p.AssetName);
-            if (entry == null) return;
-
-            FavouritesService.PinToCollection(m_Favourites, p.CollectionId, new FavouriteEntry
-            {
-                Name = entry.Name,
-                Type = entry.Type,
-                Thumbnail = entry.Thumbnail,
-                DisplayName = entry.DisplayName,
-            });
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-            UpdateIsPinned();
-            Mod.log.Info($"[Pinboard] Pinned from recent: {p.AssetName} -> {p.CollectionId}");
-        }
-
-        private void OnClearRecent()
-        {
-            if (m_Favourites == null) return;
-            FavouritesService.ClearRecentlyPlaced(m_Favourites);
-            FavouritesService.Save(m_Favourites);
-            PushRecentlyPlaced();
-            Mod.log.Info("[Pinboard] Recently placed cleared");
-        }
-
-        // ── Collections ───────────────────────────────────────────────────────
-
-        private void OnSetActiveCollection(string id)
-        {
-            if (m_Favourites == null) return;
-            m_Favourites.ActiveCollectionId = id;
-            FavouritesService.Save(m_Favourites);
-            m_ActiveCollectionIdBinding.Update(id ?? "");
-            UpdateIsPinned();
-            Mod.log.Info($"[Pinboard] Active collection: {id}");
-        }
-
-        private void OnCreateCollection(string name)
-        {
-            if (string.IsNullOrWhiteSpace(name) || m_Favourites == null) return;
-            FavouritesService.CreateCollection(m_Favourites, name.Trim());
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-            Mod.log.Info($"[Pinboard] Collection created: {name}");
-        }
-
-        private void OnDeleteCollection(string id)
-        {
-            if (m_Favourites == null) return;
-            FavouritesService.DeleteCollection(m_Favourites, id);
-            FavouritesService.Save(m_Favourites);
-            PushAll();
-            Mod.log.Info($"[Pinboard] Collection deleted: {id}");
-        }
-
-        private void OnRenameCollection(string payload)
-        {
-            if (m_Favourites == null) return;
-            var p = JsonConvert.DeserializeObject<RenamePayload>(payload);
-            if (p == null || string.IsNullOrWhiteSpace(p.Name)) return;
-            FavouritesService.RenameCollection(m_Favourites, p.Id, p.Name.Trim());
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-        }
-
-        // ── Filters ───────────────────────────────────────────────────────────
-
-        private void OnCreateFilter(string payload)
-        {
-            if (m_Favourites == null) return;
-            var p = JsonConvert.DeserializeObject<FilterActionPayload>(payload);
-            if (p == null) return;
-            FavouritesService.CreateFilter(m_Favourites, p.CollectionId, (p.Name ?? "New Filter").Trim());
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-            Mod.log.Info($"[Pinboard] Filter created in {p.CollectionId}: {p.Name}");
-        }
-
-        private void OnDeleteFilter(string payload)
-        {
-            if (m_Favourites == null) return;
-            var p = JsonConvert.DeserializeObject<FilterActionPayload>(payload);
-            if (p == null) return;
-            FavouritesService.DeleteFilter(m_Favourites, p.CollectionId, p.FilterId);
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-        }
-
-        private void OnRenameFilter(string payload)
-        {
-            if (m_Favourites == null) return;
-            var p = JsonConvert.DeserializeObject<FilterActionPayload>(payload);
-            if (p == null || string.IsNullOrWhiteSpace(p.Name)) return;
-            FavouritesService.RenameFilter(m_Favourites, p.CollectionId, p.FilterId, p.Name.Trim());
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-        }
-
-        private void OnAddToFilter(string payload)
-        {
-            if (m_Favourites == null) return;
-            var p = JsonConvert.DeserializeObject<FilterMemberPayload>(payload);
-            if (p == null) return;
-            FavouritesService.AddToFilter(m_Favourites, p.CollectionId, p.FilterId, p.AssetName);
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-        }
-
-        private void OnRemoveFromFilter(string payload)
-        {
-            if (m_Favourites == null) return;
-            var p = JsonConvert.DeserializeObject<FilterMemberPayload>(payload);
-            if (p == null) return;
-            FavouritesService.RemoveFromFilter(m_Favourites, p.CollectionId, p.FilterId, p.AssetName);
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-        }
-
-        // ── Pins ──────────────────────────────────────────────────────────────
-
-        private void OnPinCurrentAsset()
-        {
-            if (string.IsNullOrEmpty(m_CurrentPrefabName) || m_Favourites == null) return;
-            var active = FavouritesService.GetActiveCollection(m_Favourites);
-            if (active == null)
-            {
-                Mod.log.Info("[Pinboard] No active collection to pin into");
-                return;
-            }
-            if (active.Pins.Any(p => p.Name == m_CurrentPrefabName)) return;
-
-            FavouritesService.PinToCollection(m_Favourites, active.Id, new FavouriteEntry
-            {
-                Name = m_CurrentPrefabName,
-                Type = m_CurrentPrefabType,
-                Thumbnail = m_CurrentPrefabThumbnail,
-                DisplayName = m_CurrentPrefabDisplayName,
-            });
-
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-            m_IsPinnedBinding.Update(true);
-            Mod.log.Info($"[Pinboard] Pinned: {m_CurrentPrefabName} into '{active.Name}'");
-        }
-
-        private void OnTogglePin()
-        {
-            if (string.IsNullOrEmpty(m_CurrentPrefabName) || m_Favourites == null) return;
-            var active = FavouritesService.GetActiveCollection(m_Favourites);
-            if (active == null) return;
-
-            if (active.Pins.Any(p => p.Name == m_CurrentPrefabName))
-            {
-                FavouritesService.UnpinFromCollection(m_Favourites, active.Id, m_CurrentPrefabName);
-                Mod.log.Info($"[Pinboard] Unpinned: {m_CurrentPrefabName} from '{active.Name}'");
-            }
-            else
-            {
-                FavouritesService.PinToCollection(m_Favourites, active.Id, new FavouriteEntry
-                {
-                    Name = m_CurrentPrefabName,
-                    Type = m_CurrentPrefabType,
-                    Thumbnail = m_CurrentPrefabThumbnail,
-                    DisplayName = m_CurrentPrefabDisplayName,
-                });
-                Mod.log.Info($"[Pinboard] Pinned: {m_CurrentPrefabName} into '{active.Name}'");
-            }
-
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-            UpdateIsPinned();
-        }
-
-        private void OnRemoveAsset(string payload)
-        {
-            if (m_Favourites == null) return;
-            var p = JsonConvert.DeserializeObject<RemoveAssetPayload>(payload);
-            if (p == null) return;
-            FavouritesService.UnpinFromCollection(m_Favourites, p.CollectionId, p.AssetName);
-            FavouritesService.Save(m_Favourites);
-            PushCollectionsData();
-            UpdateIsPinned();
-            Mod.log.Info($"[Pinboard] Removed: {p.AssetName} from {p.CollectionId}");
-        }
-
-        // ── Prefab tracking ───────────────────────────────────────────────────
-
-        private string GetDisplayName(PrefabBase prefab)
-        {
-            var dict = GameManager.instance.localizationManager.activeDictionary;
-            if (dict.TryGetValue("Assets.NAME[" + prefab.name + "]", out var name) && !string.IsNullOrEmpty(name))
-                return name;
-            return prefab.name.Replace('_', ' ');
-        }
-
-        private void OnPrefabChanged(PrefabBase prefab)
-        {
-            if (prefab == null)
-            {
-                m_CurrentPrefabName = "";
-                m_CurrentPrefabType = "";
-                m_CurrentPrefabThumbnail = "";
-                m_CurrentPrefabDisplayName = "";
-            }
-            else
-            {
-                m_CurrentPrefabName = prefab.name;
-                m_CurrentPrefabType = prefab.GetType().Name;
-                m_CurrentPrefabThumbnail = ImageSystem.GetThumbnail(prefab) ?? "";
-                m_CurrentPrefabDisplayName = GetDisplayName(prefab);
-                Mod.log.Info($"[Pinboard] Prefab selected: {m_CurrentPrefabName} [{m_CurrentPrefabType}] -> \"{m_CurrentPrefabDisplayName}\"");
-            }
-
-            m_CurrentPrefabBinding.Update(m_CurrentPrefabDisplayName);
-            m_CurrentPrefabIdBinding.Update(m_CurrentPrefabName);
-            UpdateIsPinned();
-        }
-
-        private void UpdateIsPinned()
-        {
-            if (m_Favourites == null || string.IsNullOrEmpty(m_CurrentPrefabName))
-            {
-                m_IsPinnedBinding.Update(false);
-                return;
-            }
-            var active = FavouritesService.GetActiveCollection(m_Favourites);
-            m_IsPinnedBinding.Update(active != null && active.Pins.Any(p => p.Name == m_CurrentPrefabName));
-        }
-
-        // ── Asset selection ───────────────────────────────────────────────────
-
-        private void OnTogglePanel()
-        {
-            m_PanelOpen = !m_PanelOpen;
-            m_PanelOpenBinding.Update(m_PanelOpen);
-            Mod.log.Info($"[Pinboard] PANEL {(m_PanelOpen ? "OPENED" : "CLOSED")}");
-        }
-
-        private static readonly string[] s_CommonPrefabTypes =
-        {
-            "StaticObjectPrefab", "BuildingPrefab", "VegetationPrefab",
-            "PropPrefab", "ObjectGeometryPrefab", "MarkerObjectPrefab",
-        };
-
-        private void OnSelectAsset(string name)
-        {
-            FavouriteEntry entry = null;
-            if (m_Favourites != null)
-            {
-                foreach (var col in m_Favourites.Collections)
-                {
-                    entry = col.Pins.FirstOrDefault(p => p.Name == name);
-                    if (entry != null) break;
-                }
-            }
-
-            // 1. Fast path — the type we stored when the asset was pinned.
-            if (entry != null && !string.IsNullOrEmpty(entry.Type) &&
-                m_PrefabSystem.TryGetPrefab(new PrefabID(entry.Type, name), out PrefabBase byStored))
-            {
-                m_ToolSystem.ActivatePrefabTool(byStored);
-                Mod.log.Info($"[Pinboard] Selected: {name} ({entry.Type})");
-                return;
-            }
-
-            // 2. Guess from the common placeable prefab types.
-            foreach (var typeName in s_CommonPrefabTypes)
-            {
-                if (m_PrefabSystem.TryGetPrefab(new PrefabID(typeName, name), out PrefabBase byGuess))
-                {
-                    HealStoredType(entry, typeName);
-                    m_ToolSystem.ActivatePrefabTool(byGuess);
-                    Mod.log.Info($"[Pinboard] Selected (type fallback): {name} ({typeName})");
-                    return;
-                }
-            }
-
-            // 3. Definitive — scan every registered prefab and match by name,
-            //    so assets of any type (sculptures, custom ploppables, etc.) resolve.
-            var found = FindPrefabByName(name);
-            if (found != null)
-            {
-                HealStoredType(entry, found.GetType().Name);
-                m_ToolSystem.ActivatePrefabTool(found);
-                Mod.log.Info($"[Pinboard] Selected (name scan): {name} ({found.GetType().Name})");
-                return;
-            }
-
-            Mod.log.Info($"[Pinboard] Asset not found: {name}");
-        }
-
-        // Scans all prefab entities and returns the one whose name matches.
-        private PrefabBase FindPrefabByName(string name)
-        {
-            var query = GetEntityQuery(ComponentType.ReadOnly<PrefabData>());
-            using var entities = query.ToEntityArray(Allocator.Temp);
-            foreach (var e in entities)
-            {
-                if (m_PrefabSystem.TryGetPrefab(e, out PrefabBase prefab) && prefab.name == name)
-                    return prefab;
-            }
-            return null;
-        }
-
-        // Persists the resolved type back onto the pin so future clicks take the fast path.
-        private void HealStoredType(FavouriteEntry entry, string type)
-        {
-            if (entry == null || entry.Type == type || string.IsNullOrEmpty(type)) return;
-            entry.Type = type;
-            FavouritesService.Save(m_Favourites);
-        }
-
-        // ── Push helpers ──────────────────────────────────────────────────────
-
-        private void PushCollectionsData()
-        {
-            m_CollectionsDataBinding.Update(JsonConvert.SerializeObject(m_Favourites.Collections));
-        }
-
-        private void PushRecentlyPlaced()
-        {
-            m_RecentlyPlacedBinding.Update(JsonConvert.SerializeObject(m_Favourites.RecentlyPlaced));
-        }
-
-        private void PushAll()
-        {
-            PushCollectionsData();
-            PushRecentlyPlaced();
-            m_ActiveCollectionIdBinding.Update(m_Favourites.ActiveCollectionId ?? "");
-            UpdateIsPinned();
+            var action = Mod.Setting?.GetAction(name);
+            if (action != null) action.shouldBeEnabled = true;
+            return action;
         }
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
+        // The one place pins are loaded: every time a city or the editor finishes loading.
         protected override void OnGameLoadingComplete(Purpose purpose, GameMode mode)
         {
             base.OnGameLoadingComplete(purpose, mode);
             if (mode != GameMode.Game && mode != GameMode.Editor) return;
-            LoadFavourites();
-        }
 
-        private void LoadFavourites()
-        {
+            // Keep any changes from the city we're leaving before reloading.
+            SaveNow();
+            m_PrefabsByName = null;
+            AssetSources.ClearCache();
             m_Favourites = FavouritesService.Load();
+            RefreshStoredAssetInfo();
             PushAll();
-            Mod.log.Info($"[Pinboard] Loaded — {m_Favourites.Collections.Count} collections");
-        }
-
-        // Called by the settings page after it edits favourites.json directly,
-        // so the live in-game panel reflects the change immediately.
-        public void ReloadFromDisk()
-        {
-            m_Favourites = FavouritesService.Load();
-            PushAll();
-            Mod.log.Info("[Pinboard] Reloaded favourites from disk (settings edit)");
+            Mod.log.Info($"[Pinboard] Loaded {m_Favourites.Collections.Count} collections");
         }
 
         protected override void OnUpdate()
         {
-            if (!m_Searched && m_Favourites == null &&
-                (GameManager.instance?.gameMode == GameMode.Game ||
-                 GameManager.instance?.gameMode == GameMode.Editor))
-            {
-                m_Searched = true;
-                LoadFavourites();
-            }
+            if (WasPressed(m_TogglePanelAction)) OnTogglePanel();
+            if (WasPressed(m_PinCurrentAction)) OnPinCurrentShortcut();
+            for (var i = 0; i < m_QuickPickActions.Count; i++)
+                if (WasPressed(m_QuickPickActions[i])) OnQuickPick(i);
 
-            if (m_TogglePanelAction != null && m_TogglePanelAction.WasPerformedThisFrame())
-                OnTogglePanel();
+            SaveUsesIfDue(false);
+            SaveIfDue();
+            PollBrushOrZone();
         }
+
+        private static bool WasPressed(ProxyAction action) => action != null && action.WasPerformedThisFrame();
 
         protected override void OnDestroy()
         {
             m_ToolSystem.EventPrefabChanged -= OnPrefabChanged;
             ToolBaseSystem.EventToolActionPerformed -= OnToolActionPerformed;
             if (m_TogglePanelAction != null) m_TogglePanelAction.shouldBeEnabled = false;
-            if (m_Favourites != null) FavouritesService.Save(m_Favourites);
+            if (m_PinCurrentAction != null) m_PinCurrentAction.shouldBeEnabled = false;
+            foreach (var action in m_QuickPickActions)
+                if (action != null) action.shouldBeEnabled = false;
+            SaveNow();
             if (Instance == this) Instance = null;
             base.OnDestroy();
+        }
+
+        // ── Saving ────────────────────────────────────────────────────────────
+
+        // Most Used counts change on every placement. They are saved at most every
+        // few seconds (and when the game closes), not on every click.
+        private const float kUsesSaveDelay = 10f;
+        private bool m_UsesDirty;
+        private float m_UsesDirtySince;
+
+        // Other changes (pinning, renaming...) are saved a moment later, in the
+        // background, so the game never pauses while the file is written. Several
+        // changes in a row become one save.
+        private const float kSaveDelay = 1f;
+        private bool m_SaveDirty;
+        private float m_SaveDueAt;
+
+        private static float Now => UnityEngine.Time.realtimeSinceStartup;
+
+        private void RequestSave()
+        {
+            if (m_SaveDirty) return;
+            m_SaveDirty = true;
+            m_SaveDueAt = Now + kSaveDelay;
+        }
+
+        private void MarkUsesChanged()
+        {
+            if (m_UsesDirty) return;
+            m_UsesDirty = true;
+            m_UsesDirtySince = Now;
+        }
+
+        private void SaveIfDue()
+        {
+            if (!m_SaveDirty || m_Favourites == null || Now < m_SaveDueAt) return;
+            m_SaveDirty = false;
+            FavouritesService.SaveInBackground(m_Favourites);
+        }
+
+        private void SaveUsesIfDue(bool force)
+        {
+            if (!m_UsesDirty || m_Favourites == null) return;
+            if (!force && Now - m_UsesDirtySince < kUsesSaveDelay) return;
+            m_UsesDirty = false;
+            m_SaveDirty = false;
+            FavouritesService.SaveInBackground(m_Favourites);
+            PushMostUsed();
+        }
+
+        // Writes everything now and waits for it. Before a city loads and when the game closes.
+        private void SaveNow()
+        {
+            m_SaveDirty = false;
+            m_UsesDirty = false;
+            if (m_Favourites != null) FavouritesService.Save(m_Favourites);
+        }
+
+        // Most changes to the pins end the same way: save soon, show the new lists,
+        // and refresh the tool-options pin button.
+        private void PinsChanged()
+        {
+            RequestSave();
+            PushCollectionsData();
+            UpdateIsPinned();
+        }
+
+        // ── Talking to the panel ──────────────────────────────────────────────
+
+        // Short messages for the player, shown for a few seconds at the bottom of the
+        // panel (or on their own when it's closed). The panel has the wording for each
+        // key, so it can be translated; "args" fill in names and numbers.
+        private void Notify(string key, params string[] args)
+        {
+            m_NoticeCounter++;
+            m_NoticeBinding.Update(JsonConvert.SerializeObject(new { id = m_NoticeCounter, key, args }));
+        }
+
+        // Reads a JSON message from the UI. A garbled message is logged and ignored
+        // instead of throwing inside the game's UI update.
+        private static T Parse<T>(string payload) where T : class
+        {
+            if (string.IsNullOrEmpty(payload)) return null;
+            try
+            {
+                return JsonConvert.DeserializeObject<T>(payload);
+            }
+            catch (Exception ex)
+            {
+                Mod.log.Warn($"[Pinboard] Ignored unreadable message ({typeof(T).Name}): {ex.Message}");
+                return null;
+            }
+        }
+
+        private void PushCollectionsData() => m_CollectionsDataBinding.Update(JsonConvert.SerializeObject(m_Favourites.Collections));
+        private void PushRecentlyPlaced() => m_RecentlyPlacedBinding.Update(JsonConvert.SerializeObject(m_Favourites.RecentlyPlaced));
+        private void PushMostUsed() => m_MostUsedBinding.Update(JsonConvert.SerializeObject(m_Favourites.MostUsed));
+        private void PushQuickPins() => m_QuickPinsBinding.Update(JsonConvert.SerializeObject(m_Favourites.QuickPins));
+
+        private void PushLists()
+        {
+            PushCollectionsData();
+            PushRecentlyPlaced();
+            PushMostUsed();
+            PushQuickPins();
+        }
+
+        private void PushAll()
+        {
+            PushLists();
+            m_ActiveCollectionIdBinding.Update(m_Favourites.ActiveCollectionId ?? "");
+            UpdateIsPinned();
         }
     }
 }

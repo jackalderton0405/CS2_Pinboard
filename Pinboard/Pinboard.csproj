@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<Configurations>Debug;Release</Configurations>
 
-		<!-- Mod is branded "Pinboard"; the project/solution files keep the legacy PinIt name.
+		<!-- Pinboard 2.0 (developed as "Pinboard V2"; ships as an update to Pinboard); the project/solution files keep the legacy PinIt name.
 		     AssemblyName drives the output DLL, the deploy folder ($(LocalModsPath)\$(TargetName))
 		     and must match UI/mod.json "id" so the .dll and .mjs deploy together. -->
 		<AssemblyName>Pinboard</AssemblyName>

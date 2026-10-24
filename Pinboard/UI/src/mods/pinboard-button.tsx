@@ -1,10 +1,10 @@
 import React from "react";
-import { trigger, useValue, bindValue } from "cs2/api";
+import { useValue } from "cs2/api";
 import { Button, Tooltip } from "cs2/ui";
 import { VanillaComponentResolver } from "mods/VanillaComponentResolver/VanillaComponentResolver";
+import { useText } from "./text";
+import { panelOpen$, togglePanel } from "./game";
 
-const panelOpen$ = bindValue<boolean>("pinboard", "panelOpen", false);
-const togglePanel = () => trigger("pinboard", "togglePanel");
 
 const PinIcon = () => (
     <svg style={{ display: "block", width: "36rem", height: "36rem" }} viewBox="0 0 690 690" fill="none">
@@ -19,10 +19,11 @@ const PinIcon = () => (
 );
 
 export const PinboardButton = () => {
+    const t = useText();
     const isOpen = useValue(panelOpen$);
     const vcr = VanillaComponentResolver.instance;
     return (
-        <Tooltip tooltip="Pinboard">
+        <Tooltip tooltip={t("title")}>
             <Button
                 variant="floating"
                 selected={isOpen}

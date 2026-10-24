@@ -1,0 +1,3 @@
+# Store text files with LF in git, so it doesn't depend on each PC's settings.
+* text=auto
+*.png binary

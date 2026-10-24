@@ -20,3 +20,7 @@ Pinboard/UI/dist/*
 favourites.json
 favourites.json.bak
 favourites.json.tmp
+
+# ── Local backups and leftovers (stay on disk, not in git) ─────
+*.tgz
+_old build files/

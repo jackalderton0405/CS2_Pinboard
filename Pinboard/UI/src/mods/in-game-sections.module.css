@@ -1,0 +1,131 @@
+/* ── List items ──────────────────────────────────────────────────────────── */
+.listEmpty { padding: 10rem 13rem; font-size: 13rem; color: var(--menuText2Normal); }
+
+
+/* Colours come from the game (its accent colour and panel colours), so the
+   section follows the game's interface style and transparency settings. */
+
+/* ── Tool options: collection button, filters, quick pins ── */
+/* Pin / Pinned: fixed width so it doesn't jump when the word changes. */
+.tbPinBtn {
+  width: 84rem; height: 36rem;
+  flex-shrink: 0;
+  border: none; border-radius: 3rem;
+  background-color: rgba(0,0,0,0.6);
+  color: #ffffff;
+  font-family: var(--fontFamily);
+  font-size: 13rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5rem;
+}
+.tbPinBtn:hover { background-color: rgba(0,0,0,0.75); }
+.tbPinBtnOn, .tbPinBtnOn:hover { background-color: var(--accentColorNormal); }
+.tbColBtn {
+  display: flex; align-items: center; gap: 6rem;
+  height: 36rem; max-width: 160rem;
+  padding: 0 10rem;
+  margin-left: 4rem;
+  border: none; border-radius: 3rem;
+  background-color: rgba(0,0,0,0.6);
+  color: #ffffff;
+  font-family: var(--fontFamily);
+  font-size: 13rem;
+  cursor: pointer;
+}
+.tbColBtn:hover, .tbColBtnOpen { background-color: var(--menuHoverColor); }
+.tbColName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tbBlock { display: flex; flex-direction: column; gap: 6rem; padding: 0 10rem 8rem; font-family: var(--fontFamily); }
+.tbColList { border-radius: 3rem; background-color: var(--toolbarFieldColor); }
+.tbColOption { padding: 6rem 10rem; font-size: 13rem; color: var(--menuText1Normal); cursor: pointer; }
+.tbColOption:hover { background-color: var(--menuHoverColor); }
+.tbColOptionActive, .tbColOptionActive:hover { color: var(--accentColorNormal); font-weight: bold; }
+.tbFilters { display: flex; flex-wrap: wrap; gap: 4rem 12rem; }
+.tbFilter { display: flex; align-items: center; gap: 6rem; font-size: 13rem; color: var(--menuText1Normal); cursor: pointer; padding: 2rem 0; }
+.tbFilter:hover { opacity: 0.8; }
+.tbFilterOn { color: var(--accentColorNormal); }
+.tbQuick { display: flex; justify-content: space-between; }
+/* Square boxes of a fixed size, so the row looks the same however many are filled. */
+.tbQuickSlot {
+  position: relative;
+  width: 34rem;
+  height: 34rem;
+  flex: none;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 3rem;
+  background-color: rgba(0,0,0,0.35);
+  overflow: hidden;
+  cursor: pointer;
+}
+.tbQuickSlot:hover { border-color: var(--accentColorNormal); }
+.tbQuickEmpty { border: 1px solid rgba(255,255,255,0.12); background-color: rgba(0,0,0,0.15); }
+.tbQuickCurrent { border: 2rem solid var(--accentColorNormal); }
+.tbQuickImg { width: 100%; height: 100%; object-fit: cover; }
+.tbQuickNum {
+  position: absolute; left: 3rem; top: 1rem;
+  font-size: 10rem; font-weight: bold;
+  color: var(--menuText1Normal);
+  text-shadow: 0 0 3rem rgba(0,0,0,0.9);
+}
+
+/* ── Section in the side info panel: folds open like the game's own sections ── */
+/* Kept in from the panel's edges, like the game's own rows (Transform Tool, for example). */
+.infoSection {
+  font-family: var(--fontFamily); overflow: hidden; padding: 0 10rem;
+  /* The thin line the game puts between its own sections */
+  border-top: var(--stroke2) solid var(--dividerColor);
+}
+.infoArrow { display: block; width: 20rem; height: 20rem; flex: none; opacity: 0.75; }
+.infoHeader {
+  display: flex; align-items: center; gap: 8rem;
+  padding: 8rem 0;
+  cursor: pointer;
+}
+/* Capitals, like the game's own row titles (ZONE, TRANSFORM TOOL...) */
+.infoTitle { font-size: var(--fontSizeS); text-transform: uppercase; color: var(--menuText1Normal); }
+.infoSummary { flex: 1; text-align: right; font-size: 12rem; color: var(--menuText2Normal); }
+.infoList { display: flex; flex-direction: column; gap: 6rem; padding-bottom: 8rem; }
+.infoEmpty { font-size: 13rem; color: var(--menuText2Normal); padding: 2rem 0; }
+.infoColName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.infoColState { font-size: 12rem; font-weight: bold; flex-shrink: 0; margin-left: 8rem; }
+
+/* One collection the asset is in: name + unpin, then its filters */
+.infoColGroup {
+  display: flex; flex-direction: column; gap: 4rem;
+  padding: 6rem; border-radius: 3rem;
+  background-color: var(--toolbarFieldColor);
+}
+.infoColHead {
+  display: flex; align-items: center; gap: 6rem;
+  font-size: 13rem; font-weight: bold; color: var(--menuText1Normal);
+  padding-left: 4rem;
+}
+.infoUnpin {
+  display: flex; align-items: center; gap: 5rem; flex: none;
+  height: 26rem; padding: 0 10rem;
+  border: none; border-radius: 3rem;
+  background-color: var(--accentColorNormal); color: #ffffff;
+  font-family: var(--fontFamily); font-size: 12rem; font-weight: bold;
+  cursor: pointer;
+}
+.infoUnpin:hover { opacity: 0.85; }
+.infoFilters { display: flex; flex-wrap: wrap; gap: 4rem 12rem; padding: 0 4rem 2rem; }
+
+/* "+ Add to a collection" dropdown */
+.infoAdd {
+  display: flex; align-items: center; gap: 8rem;
+  width: 100%; height: 32rem; padding: 0 10rem;
+  border: none; border-radius: 3rem;
+  background-color: var(--toolbarFieldColor); color: var(--menuText1Normal);
+  font-family: var(--fontFamily); font-size: 13rem;
+  cursor: pointer;
+}
+.infoAdd:hover, .infoAddOpen { background-color: var(--menuHoverColor); }
+.infoAddOption {
+  display: flex; align-items: center;
+  padding: 6rem 10rem;
+  font-size: 13rem; color: var(--menuText1Normal);
+  cursor: pointer;
+}
+.infoAddOption:hover { background-color: var(--menuHoverColor); }

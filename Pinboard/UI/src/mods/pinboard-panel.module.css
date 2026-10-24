@@ -15,7 +15,8 @@
   pointer-events: auto;
   font-family: var(--fontFamily);
 }
-.panelExpanded  { height: 620rem; overflow: hidden; }
+/* Grows with what's in it, up to the old fixed height, then the list scrolls. */
+.panelExpanded  { max-height: 620rem; overflow: hidden; }
 .panelCollapsed { height: auto;   overflow: visible; }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
@@ -24,17 +25,20 @@
   align-items: center;
   gap: 8rem;
   padding: 13rem 16rem;
-  background-color: var(--menuPanel1);
+  /* The game's title-bar blue (its accent colour), like its own panels. */
+  background-color: var(--accentColorNormal);
   border-bottom: 1px solid var(--menuBorderColor1);
   border-radius: 8rem 8rem 0 0;
   flex-shrink: 0;
+  cursor: move;
 }
+.headerButtons { display: flex; align-items: center; gap: 2rem; cursor: default; }
 .headerCollapsed { border-bottom: none; border-radius: 8rem; }
 
 .headerTitle {
   font-size: 17rem;
   font-weight: bold;
-  color: var(--menuText1Normal);
+  color: #ffffff;
   flex-grow: 1;
   letter-spacing: 0.3px;
 }
@@ -45,24 +49,24 @@
   align-items: center;
   gap: 5rem;
   flex-shrink: 0;
-  background-color: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.15);
+  background-color: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.5);
   border-radius: 20rem;
   padding: 5rem 14rem;
-  font-size: 13rem;
-  color: var(--menuText1Normal);
+  font-size: 14rem;
+  color: #ffffff;
   cursor: pointer;
   white-space: nowrap;
   font-weight: 600;
 }
 .pinBtn:hover { background-color: rgba(255,255,255,0.13); border-color: rgba(255,255,255,0.28); }
 .pinBtnPinned {
-  background-color: rgba(200,168,75,0.22);
-  border: 1px solid rgba(200,168,75,0.7);
+  background-color: #ffffff;
+  border: 1px solid #ffffff;
   border-radius: 20rem;
   padding: 5rem 14rem;
-  color: #c8a84b;
-  font-size: 13rem;
+  color: var(--accentColorNormal);
+  font-size: 14rem;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -87,17 +91,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.45;
+  opacity: 0.8;
 }
 .ctrlBtn:hover { opacity: 1; background-color: rgba(255,255,255,0.09); }
 
 /* ── Section bars ────────────────────────────────────────────────────────── */
 .sectionBar {
   padding: 10rem 16rem 6rem;
-  font-size: 10rem;
+  font-size: 12rem;
   font-weight: bold;
   color: var(--menuText2Normal);
-  letter-spacing: 1.8px;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
   flex-shrink: 0;
 }
@@ -122,12 +126,12 @@
 .breadcrumbCurrent { color: var(--menuText1Normal); font-weight: bold; }
 
 /* ── Scroll area ─────────────────────────────────────────────────────────── */
-.scrollArea { overflow-y: scroll; flex: 1 1 0; min-height: 0; }
+.scrollArea { overflow-y: scroll; flex: 0 1 auto; min-height: 0; }
 
 /* ── Empty state ─────────────────────────────────────────────────────────── */
 .emptyState {
   padding: 44rem 0;
-  font-size: 13rem;
+  font-size: 14rem;
   color: var(--menuText1Disabled);
   text-align: center;
   letter-spacing: 0.3px;
@@ -148,10 +152,10 @@
 /* Nudge the leading folder/clock icon off the collection name (gap alone is too tight) */
 .collectionRow > svg:first-child { margin-right: 4rem; }
 
-.collectionName { flex: 1; font-size: 16rem; color: var(--menuText1Normal); }
+.collectionName { flex: 1; font-size: 14rem; color: var(--menuText1Normal); }
 
 .collectionCount {
-  font-size: 11rem;
+  font-size: 12rem;
   color: var(--menuText2Normal);
   flex-shrink: 0;
   min-width: 52rem;
@@ -165,26 +169,15 @@
 /* action icons — always in flow (fixed width) so count/chevron never shift on hover */
 .rowActions {
   display: flex;
-  gap: 0;
-  width: 44rem;
+  gap: 2rem;
   flex-shrink: 0;
   justify-content: flex-end;
 }
-.collectionRow .rowActions         { opacity: 0; pointer-events: none; }
-.collectionRow:hover .rowActions   { opacity: 1; pointer-events: auto; }
+/* Always visible but faint, brighter when the row is hovered, so they can be found. */
+.collectionRow .rowActions         { opacity: 0.4; }
+.collectionRow:hover .rowActions   { opacity: 1; }
 .collectionRowRenaming .rowActions { visibility: hidden; }
 
-/* Matches .rowActions width so rows without action buttons (Recently Placed)
-   keep their badge + chevron aligned with the collection rows below. */
-.rowActionsSpacer { width: 44rem; flex-shrink: 0; }
-
-/* ── Recently Placed folder (auto-managed) ───────────────────────────────── */
-/* Distinguished by the clock icon + gold label only — no persistent
-   background so it doesn't read as a "selected" row. */
-.recentFolderRow .collectionName { color: var(--menuText1Normal); font-weight: bold; }
-/* Separate the system row from user collections: keep the divider line but add
-   breathing space below so the whitespace signals the boundary. */
-.recentFolderRow { margin-bottom: 6rem; }
 
 .clearRecentBtn {
   flex-shrink: 0;
@@ -192,7 +185,7 @@
   border: 1px solid rgba(255,255,255,0.15);
   border-radius: 4rem;
   padding: 4rem 14rem;
-  font-size: 11rem;
+  font-size: 12rem;
   font-weight: 600;
   color: var(--menuText1Normal);
   cursor: pointer;
@@ -206,15 +199,18 @@
 .iconBtn {
   background: transparent;
   border: none;
+  border-radius: 4rem;
   cursor: pointer;
-  padding: 0 4rem;
+  padding: 3rem 4rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   color: var(--menuText2Normal);
 }
-.iconBtn:hover       { color: var(--menuText1Normal); }
-.iconBtnSm           { padding: 0 2rem; }
+.iconBtn:hover       { color: var(--menuText1Normal); background-color: rgba(255,255,255,0.08); }
+/* Keeps the space of a button that isn't needed on this row, so rows line up. */
+.hiddenBtn, .hiddenBtn:hover { visibility: hidden; }
+.iconBtnSm           { padding: 2rem 3rem; }
 .iconBtnDelete:hover { color: var(--negativeColor); }
 
 /* ── New item row ────────────────────────────────────────────────────────── */
@@ -223,7 +219,7 @@
   display: flex;
   align-items: center;
   gap: 8rem;
-  font-size: 13rem;
+  font-size: 14rem;
   color: var(--menuText2Normal);
   cursor: pointer;
   padding: 8rem 0;
@@ -234,10 +230,10 @@
 /* ── Inline rename inputs ────────────────────────────────────────────────── */
 .renameInput {
   background-color: var(--toolbarFieldColor);
-  border: 1px solid #c8a84b;
+  border: 1px solid var(--accentColorNormal);
   border-radius: 4rem;
   padding: 6rem 10rem;
-  font-size: 15rem;
+  font-size: 14rem;
   color: var(--menuText1Normal);
   outline: none;
   flex: 1;
@@ -248,7 +244,7 @@
 .tabRenameInput {
   background: transparent;
   border: none;
-  border-bottom: 1px solid #c8a84b;
+  border-bottom: 1px solid var(--accentColorNormal);
   padding: 0 2rem;
   font-size: 12rem;
   color: var(--menuText1Normal);
@@ -290,15 +286,15 @@
   border-color: rgba(255,255,255,0.2);
 }
 .tabActive {
-  background-color: rgba(200,168,75,0.2);
-  border-color: rgba(200,168,75,0.65);
-  color: #c8a84b;
+  background-color: var(--activeColor);
+  border-color: var(--accentColorNormal);
+  color: var(--accentColorNormal);
   font-weight: bold;
 }
 .tabActive:hover {
-  background-color: rgba(200,168,75,0.28);
-  border-color: #c8a84b;
-  color: #c8a84b;
+  background-color: var(--activeColorBright);
+  border-color: var(--accentColorNormal);
+  color: var(--accentColorNormal);
 }
 .tabNew {
   border-style: dashed;
@@ -309,9 +305,9 @@
 
 /* tab action icons — hidden until chip hovered */
 .tabActions { display: flex; }
-.tab .iconBtn          { opacity: 0; pointer-events: none; }
-.tab:hover .iconBtn    { opacity: 1; pointer-events: auto; }
-.tabActive .iconBtn    { color: rgba(200,168,75,0.7); }
+.tab .iconBtn          { opacity: 0.4; }
+.tab:hover .iconBtn    { opacity: 1; }
+.tabActive .iconBtn    { color: var(--accentColorNormal); }
 .tabActive .iconBtn:hover { color: var(--menuText1Normal); }
 .tabActive .iconBtnDelete:hover { color: var(--negativeColor); }
 
@@ -336,12 +332,15 @@
   background-color: var(--toolbarFieldColor);
   border: 1px solid var(--menuBorderColor1);
   border-radius: 4rem;
-  padding: 7rem 30rem;
-  font-size: 13rem;
+  /* Height comes from line-height, not padding, so the bottom of the letters
+     isn't cut off in the game's screen engine. */
+  padding: 0 30rem;
+  font-size: 14rem;
+  line-height: 34rem;
   color: var(--menuText1Normal);
   outline: none;
   box-sizing: border-box;
-  height: 32rem;
+  height: 36rem;
 }
 .searchInput:focus { border-color: var(--menuBorderColor2); }
 .searchClear {
@@ -361,7 +360,7 @@
   border: 1px solid var(--menuBorderColor1);
   border-radius: 4rem;
   padding: 0 12rem;
-  font-size: 11rem;
+  font-size: 12rem;
   color: var(--menuText2Normal);
   cursor: pointer;
   white-space: nowrap;
@@ -369,13 +368,12 @@
   letter-spacing: 0.5px;
   height: 32rem;
   box-sizing: border-box;
-  margin-left: 24rem;
 }
 .sortBtn:hover { border-color: var(--menuBorderColor2); color: var(--menuText1Normal); }
 .sortBtnActive {
-  background-color: rgba(200,168,75,0.18);
-  border-color: rgba(200,168,75,0.65);
-  color: #c8a84b;
+  background-color: var(--activeColor);
+  border-color: var(--accentColorNormal);
+  color: var(--accentColorNormal);
   font-weight: bold;
 }
 
@@ -386,8 +384,18 @@
   display: flex;
   align-items: center;
   gap: 12rem;
-  padding: 13rem 16rem;
+  padding: 11rem 16rem;
+  cursor: pointer;
 }
+/* The asset you're holding right now: gold edge on the left. */
+.favRowCurrent .favRowInner { border-left: 3rem solid var(--accentColorNormal); padding-left: 13rem; background-color: rgba(255,255,255,0.1); }
+.favText { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.favSubtitle {
+  font-size: 12rem;
+  color: var(--menuText2Normal);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.favActions { display: flex; align-items: center; flex-shrink: 0; }
 .favRow:hover .favRowInner { background-color: var(--menuHoverColor); }
 
 .favThumb {
@@ -404,8 +412,8 @@
   color: var(--menuText1Disabled);
 }
 .favName {
-  flex: 1; min-width: 0;
-  font-size: 15rem;
+  min-width: 0;
+  font-size: 14rem;
   color: var(--menuText1Normal);
   cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -419,13 +427,12 @@
   border-radius: 4rem; cursor: pointer;
   padding: 5rem 6rem; flex-shrink: 0;
   color: var(--menuText2Normal);
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.4;
 }
-.favRow:hover .favActionBtn   { opacity: 1; pointer-events: auto; }
+.favRow:hover .favActionBtn   { opacity: 1; }
 .favActionBtn:hover           { background-color: rgba(255,255,255,0.08); border-color: var(--menuBorderColor1); }
-.favActionBtnActive           { opacity: 1; pointer-events: auto; background-color: rgba(200,168,75,0.12); border-color: rgba(200,168,75,0.5); color: #c8a84b; }
-.favActionBtnActive:hover     { border-color: #c8a84b; background-color: rgba(200,168,75,0.2); }
+.favActionBtnActive           { opacity: 1; background-color: rgba(255,255,255,0.1); border-color: var(--accentColorNormal); color: var(--accentColorNormal); }
+.favActionBtnActive:hover     { border-color: var(--accentColorNormal); background-color: var(--activeColor); }
 
 .favRemoveBtn {
   display: flex; align-items: center; justify-content: center;
@@ -434,11 +441,10 @@
   border-radius: 4rem; cursor: pointer;
   padding: 5rem 6rem; flex-shrink: 0;
   color: var(--menuText2Normal);
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0.4;
   margin-left: 2rem;
 }
-.favRow:hover .favRemoveBtn { opacity: 1; pointer-events: auto; }
+.favRow:hover .favRemoveBtn { opacity: 1; }
 .favRemoveBtn:hover { background-color: rgba(220,60,60,0.22); border-color: rgba(220,60,60,0.55); color: var(--negativeColor); }
 
 /* ── Checkbox list assignment ────────────────────────────────────────────── */
@@ -446,7 +452,7 @@
 .checkboxRow {
   display: flex; align-items: center; gap: 8rem;
   padding: 5rem 10rem; cursor: pointer; border-radius: 4rem;
-  font-size: 13rem; color: var(--menuText2Normal);
+  font-size: 14rem; color: var(--menuText2Normal);
 }
 .checkboxRow:hover  { background-color: var(--menuHoverColor); }
 .checkboxRowChecked { color: var(--menuText1Normal); }
@@ -457,7 +463,7 @@
 .pickColHeader {
   display: flex; align-items: center; gap: 6rem;
   padding: 6rem 8rem; cursor: pointer; border-radius: 4rem;
-  font-size: 13rem; color: var(--menuText1Normal);
+  font-size: 14rem; color: var(--menuText1Normal);
   user-select: none;
 }
 .pickColHeader:hover { background-color: var(--menuHoverColor); }
@@ -468,8 +474,31 @@
 /* Gold dot: asset is already pinned somewhere inside this collection */
 .pickColDot {
   width: 6rem; height: 6rem; border-radius: 50%;
-  background-color: #c8a84b; flex-shrink: 0;
+  background-color: var(--accentColorNormal); flex-shrink: 0;
 }
+
+/* Pin / Pinned button on each collection in the picker */
+.pickPinBtn, .pickPinBtnOn {
+  flex-shrink: 0;
+  border-radius: 4rem;
+  padding: 3rem 10rem;
+  font-size: 12rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pickPinBtn {
+  background-color: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--menuText1Normal);
+}
+.pickPinBtn:hover { background-color: var(--activeColor); border-color: var(--accentColorNormal); }
+.pickPinBtnOn {
+  background-color: var(--accentColorNormal);
+  border: 1px solid var(--accentColorNormal);
+  color: #ffffff;
+}
+.pickPinBtnOn:hover { opacity: 0.85; }
 
 /* Lists indented under their collection */
 .pickSubList {
@@ -480,3 +509,273 @@
   padding: 4rem 10rem; font-size: 12rem;
   color: var(--menuText1Disabled); font-style: italic;
 }
+
+/* ── Text sizes ───────────────────────────────────────────────────────────────
+   Three sizes only: 17rem for the panel title, 14rem for normal text and
+   12rem for small labels. */
+
+/* ── Grid of pictures ─────────────────────────────────────────────────────── */
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 10rem 10rem 4rem;
+}
+.gridTile {
+  width: 84rem;
+  margin: 0 3rem 8rem;
+  padding: 5rem;
+  border-radius: 6rem;
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+.gridTile:hover { background-color: var(--menuHoverColor); border-color: var(--menuBorderColor1); }
+.gridTileCurrent, .gridTileCurrent:hover { border-color: var(--accentColorNormal); background-color: rgba(255,255,255,0.1); }
+.gridThumb { width: 70rem; height: 70rem; border-radius: 4rem; object-fit: cover; }
+.gridThumbEmpty {
+  width: 70rem; height: 70rem;
+  border-radius: 4rem;
+  background-color: rgba(255,255,255,0.04);
+  border: 1px solid var(--dividerColor);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14rem;
+  color: var(--menuText1Disabled);
+}
+.gridName {
+  margin-top: 5rem;
+  width: 100%;
+  font-size: 12rem;
+  color: var(--menuText1Normal);
+  text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── Grid / list switch and sort menu ─────────────────────────────────────── */
+.viewBtn {
+  display: flex; align-items: center; justify-content: center;
+  background-color: var(--toolbarFieldColor);
+  border: 1px solid var(--menuBorderColor1);
+  border-radius: 4rem;
+  height: 32rem; width: 32rem;
+  margin-left: 6rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  opacity: 0.8;
+}
+.viewBtn:hover { border-color: var(--menuBorderColor2); opacity: 1; }
+.viewBtnActive { border-color: var(--accentColorNormal); background-color: var(--activeColor); opacity: 1; }
+.sortWrap { position: relative; flex-shrink: 0; margin-left: 10rem; }
+.sortBtn { display: flex; align-items: center; gap: 6rem; }
+.sortMenu {
+  display: flex; flex-wrap: wrap; gap: 4rem;
+  padding: 0 0 8rem;
+  flex-shrink: 0;
+}
+.sortOption {
+  padding: 4rem 10rem;
+  border-radius: 3rem;
+  background-color: var(--toolbarFieldColor);
+  font-size: 13rem;
+  color: var(--menuText2Normal);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sortOption:hover { background-color: var(--menuHoverColor); color: var(--menuText1Normal); }
+.sortOptionActive, .sortOptionActive:hover { background-color: var(--accentColorNormal); color: #ffffff; font-weight: bold; }
+
+/* ── Move / copy picker ───────────────────────────────────────────────────── */
+.moveRow {
+  display: flex; align-items: center; gap: 8rem;
+  padding: 4rem 8rem;
+  border-radius: 4rem;
+  font-size: 14rem;
+  color: var(--menuText1Normal);
+}
+.moveRow:hover { background-color: var(--menuHoverColor); }
+.smallBtn {
+  flex-shrink: 0;
+  background-color: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4rem;
+  padding: 3rem 10rem;
+  font-size: 12rem;
+  font-weight: 600;
+  color: var(--menuText1Normal);
+  cursor: pointer;
+}
+.smallBtn:hover { background-color: var(--activeColor); border-color: var(--accentColorNormal); }
+
+.hint {
+  padding: 10rem 16rem 12rem;
+  font-size: 12rem;
+  color: var(--menuText1Disabled);
+  text-align: center;
+}
+
+/* ── Short messages (with Undo) ───────────────────────────────────────────── */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10rem;
+  padding: 9rem 14rem;
+  border-top: 1px solid var(--menuBorderColor1);
+  background-color: var(--menuPanel1);
+  flex-shrink: 0;
+}
+/* Same message when the panel is closed (for the shortcut keys). */
+.toastFloating {
+  position: fixed;
+  top: 60rem;
+  right: 10rem;
+  width: 340rem;
+  border: 1px solid var(--menuBorderColor1);
+  border-radius: 6rem;
+  background-color: var(--panelColorNormal);
+  backdrop-filter: var(--panelBlur);
+  box-shadow: 0 6rem 24rem rgba(0,0,0,0.7);
+  z-index: 1000;
+  pointer-events: auto;
+  font-family: var(--fontFamily);
+}
+.toastText { flex: 1; min-width: 0; font-size: 14rem; color: var(--menuText1Normal); }
+.toastUndo {
+  flex-shrink: 0;
+  background-color: var(--activeColor);
+  border: 1px solid var(--accentColorNormal);
+  border-radius: 4rem;
+  padding: 4rem 14rem;
+  font-size: 12rem;
+  font-weight: bold;
+  color: var(--accentColorNormal);
+  cursor: pointer;
+}
+.toastUndo:hover { background-color: var(--activeColorBright); }
+
+/* ── Share code box ───────────────────────────────────────────────────────── */
+.shareBody { display: flex; flex-direction: column; gap: 10rem; }
+.sharePreview {
+  font-size: 12rem;
+  color: var(--menuText2Normal);
+  text-align: center;
+  padding: 4rem 0;
+}
+
+/* ── Pin a district form ──────────────────────────────────────────────────── */
+.districtForm { display: flex; flex-direction: column; padding: 4rem 16rem 16rem; }
+.formHeading {
+  margin: 14rem 0 6rem;
+  font-size: 12rem;
+  font-weight: bold;
+  color: var(--menuText2Normal);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.formIndent { padding-left: 30rem; }
+.zonedNote { padding: 2rem 16rem 8rem 30rem; font-size: 12rem; color: var(--menuText2Normal); }
+.formRowLabel { flex: 1; }
+.formCount { font-size: 12rem; color: var(--menuText2Normal); }
+.formInput { margin: 4rem 0 6rem 30rem; flex: none; }
+.primaryBtn {
+  margin-top: 12rem;
+  padding: 9rem 14rem;
+  border-radius: 4rem;
+  border: 1px solid var(--accentColorNormal);
+  background-color: var(--activeColor);
+  color: var(--accentColorNormal);
+  font-size: 14rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+.primaryBtn:hover { background-color: var(--activeColorBright); }
+.primaryBtnDisabled, .primaryBtnDisabled:hover {
+  opacity: 0.4;
+  cursor: default;
+  background-color: rgba(255,255,255,0.1);
+}
+
+/* ── Tabs along the top ── */
+.mainTabBar {
+  display: flex;
+  border-bottom: 1px solid var(--menuBorderColor1);
+  background-color: var(--menuPanel1);
+  flex-shrink: 0;
+}
+.mainTab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rem;
+  padding: 9rem 4rem 7rem;
+  font-size: 12rem;
+  font-weight: 600;
+  color: var(--menuText2Normal);
+  cursor: pointer;
+  border-bottom: 2rem solid transparent;
+  opacity: 0.8;
+}
+.mainTab:hover { color: var(--menuText1Normal); opacity: 1; background-color: var(--menuHoverColor); }
+.mainTabActive, .mainTabActive:hover { color: #ffffff; background-color: var(--accentColorNormal); border-bottom-color: transparent; opacity: 1; }
+
+/* ── Recently Placed / Most Used switch ── */
+.segmented {
+  display: flex;
+  border: 1px solid var(--menuBorderColor1);
+  border-radius: 4rem;
+  overflow: hidden;
+}
+.segment {
+  display: flex;
+  align-items: center;
+  gap: 6rem;
+  padding: 4rem 12rem;
+  font-size: 12rem;
+  color: var(--menuText2Normal);
+  cursor: pointer;
+}
+.segment + .segment { border-left: 1px solid var(--menuBorderColor1); }
+.segment:hover { color: var(--menuText1Normal); background-color: var(--menuHoverColor); }
+.segmentActive, .segmentActive:hover { color: var(--accentColorNormal); background-color: rgba(255,255,255,0.1); }
+.segmentCount { opacity: 0.6; }
+
+/* ── Quick pins ── */
+.quickExplain {
+  padding: 10rem 16rem;
+  font-size: 12rem;
+  color: var(--menuText2Normal);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.quickKey {
+  flex-shrink: 0;
+  width: 50rem;
+  font-size: 12rem;
+  font-weight: bold;
+  color: var(--accentColorNormal);
+}
+.quickEmptyThumb {
+  width: 40rem; height: 40rem; flex-shrink: 0;
+  border-radius: 4rem;
+  border: 1px dashed rgba(255,255,255,0.2);
+}
+.quickEmptyText { font-size: 14rem; color: var(--menuText1Disabled); }
+.quickChooser {
+  display: flex;
+  flex-direction: column;
+  gap: 8rem;
+  padding: 4rem 16rem 12rem;
+  background-color: rgba(0,0,0,0.15);
+}
+.quickChooser .primaryBtn { margin-top: 8rem; }
+.quickChooser .hint { padding: 4rem 0; text-align: left; }
+.quickCandidates { max-height: 220rem; overflow-y: scroll; }
+.quickCandidate {
+  display: flex;
+  align-items: center;
+  gap: 10rem;
+  padding: 5rem 6rem;
+  border-radius: 4rem;
+  cursor: pointer;
+}
+.quickCandidate:hover { background-color: var(--menuHoverColor); }

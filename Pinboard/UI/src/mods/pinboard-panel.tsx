@@ -1,12 +1,37 @@
-import React, { useState, useRef } from "react";
-import { trigger, useValue, bindValue } from "cs2/api";
-import { ConfirmationDialog, Portal } from "cs2/ui";
+import React, { useState, useRef, useEffect } from "react";
+import { useValue } from "cs2/api";
+import { Portal, Tooltip } from "cs2/ui";
 import styles from "./pinboard-panel.module.css";
 import "./pinboard-scrollbar.css";
+import { useText, isTextKey } from "./text";
+import { parseShared } from "./parse-cache";
+import { CollectionData, FavouriteEntry, Notice, PanelLayout, RemovedPin, SortMode } from "./types";
+import { detailsOf, matches, nameOf, parse, sortLabel, sortPins, SORT_MODES } from "./assets";
+import {
+    panelOpen$, collectionsData$, currentPrefab$, currentPrefabId$, recentlyPlaced$, mostUsed$,
+    panelLayout$, notice$, quickPins$,
+    togglePanel, pinCurrentAsset, removeAsset, restorePin, movePin,
+    createCollection, deleteCollection, renameCollection, exportCollection, importCollection,
+    createFilter, deleteFilter, renameFilter, addToFilter, removeFromFilter,
+    clearRecent, clearMostUsed, savePanelPosition, setGridView, setSortMode,
+    MAX_COLLECTION_NAME, MAX_FILTER_NAME,
+} from "./game";
+import {
+    CheckboxChecked, CheckboxUnchecked, ChevronDownIcon, ChevronRightIcon, ChevronUpIcon, ClockIcon, CloseIcon,
+    FilterIcon, FolderIcon, GridIcon, ListIcon, MoveIcon, PinIcon, ShareIcon, StarIcon,
+} from "./icons";
+import { AssetGrid, AssetRow, IconButton, NameInput, PinPickerButton, SearchBox, ShowMore } from "./panel/common";
+import { CollectionRowItem, FilterTabItem } from "./panel/collection-rows";
+import { MoveCopyPicker, PinPicker } from "./panel/pickers";
+import { DistrictView } from "./panel/district-view";
+import { QuickPinsView } from "./panel/quick-pins-view";
+import { ConfirmDialog, MissingAssetDialog, ShareCodeDialog } from "./panel/dialogs";
 
-interface FavouriteEntry { name: string; type: string; thumbnail?: string; displayName?: string; }
-interface FilterData { id: string; name: string; assets: string[]; }
-interface CollectionData { id: string; name: string; pins: FavouriteEntry[]; filters: FilterData[]; }
+// The Pinboard panel: the window with the Pins, Recent, Quick pins and More tabs.
+// The smaller pieces it's built from are in the panel/ folder.
+
+type View = "root" | "collection" | "recent" | "mostUsed" | "quick" | "more" | "district";
+type Tab = "pins" | "recent" | "quick" | "more";
 
 type PendingDelete =
   | { kind: "collection"; id: string; name: string }
@@ -16,485 +41,224 @@ type Renaming =
   | { kind: "collection"; id: string; value: string }
   | { kind: "filter"; collectionId: string; filterId: string; value: string };
 
-// ── Bindings ──────────────────────────────────────────────────────────────────
-const panelOpen$        = bindValue<boolean>("pinboard", "panelOpen", false);
-const collectionsData$  = bindValue<string>("pinboard", "collectionsData", "[]");
-const currentPrefab$    = bindValue<string>("pinboard", "currentPrefabName", "");
-const currentPrefabId$  = bindValue<string>("pinboard", "currentPrefabId", "");
-const isPinned$         = bindValue<boolean>("pinboard", "isPinned", false);
-const recentlyPlaced$   = bindValue<string>("pinboard", "recentlyPlacedData", "[]");
+// The short message at the bottom of the panel.
+interface Toast { id: number; text: string; undo?: RemovedPin; }
 
-// ── Triggers ──────────────────────────────────────────────────────────────────
-const close = () => trigger("pinboard", "togglePanel");
-const selectAsset = (name: string) => trigger("pinboard", "selectAsset", name);
-const pinCurrentAsset = () => trigger("pinboard", "pinCurrentAsset");
-const removeAsset = (collectionId: string, assetName: string) =>
-    trigger("pinboard", "removeAsset", JSON.stringify({ collectionId, assetName }));
-const setActiveCollection = (id: string) => trigger("pinboard", "setActiveCollection", id);
-const createCollection = (name: string) => trigger("pinboard", "createCollection", name);
-const deleteCollection = (id: string) => trigger("pinboard", "deleteCollection", id);
-const renameCollection = (id: string, name: string) =>
-    trigger("pinboard", "renameCollection", JSON.stringify({ id, name }));
-const createFilter = (collectionId: string, name: string) =>
-    trigger("pinboard", "createFilter", JSON.stringify({ collectionId, name }));
-const deleteFilter = (collectionId: string, filterId: string) =>
-    trigger("pinboard", "deleteFilter", JSON.stringify({ collectionId, filterId }));
-const renameFilter = (collectionId: string, filterId: string, name: string) =>
-    trigger("pinboard", "renameFilter", JSON.stringify({ collectionId, filterId, name }));
-const addToFilter = (collectionId: string, filterId: string, assetName: string) =>
-    trigger("pinboard", "addToFilter", JSON.stringify({ collectionId, filterId, assetName }));
-const removeFromFilter = (collectionId: string, filterId: string, assetName: string) =>
-    trigger("pinboard", "removeFromFilter", JSON.stringify({ collectionId, filterId, assetName }));
-const pinFromRecent = (collectionId: string, assetName: string) =>
-    trigger("pinboard", "pinFromRecent", JSON.stringify({ collectionId, assetName }));
-const clearRecent = () => trigger("pinboard", "clearRecent");
-
-// ── Brand colour (no game CSS variable equivalent) ────────────────────────────
-const GOLD     = "#c8a84b";
-const GOLD_BG  = "rgba(200, 168, 75, 0.18)";
-
-// ── SVG icon helpers ──────────────────────────────────────────────────────────
-const svgStyle = (size = "14rem", opacity = 1): React.CSSProperties => ({
-    display: "block", flexShrink: 0, width: size, height: size, opacity,
-});
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
-
-const CloseIcon = ({ size = "14rem", opacity = 1 }: { size?: string; opacity?: number }) => (
-    <svg style={svgStyle(size, opacity)} viewBox="0 0 24 24" fill="none">
-        <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
-    </svg>
-);
-
-const ChevronDownIcon = ({ size = "14rem", opacity = 1 }: { size?: string; opacity?: number }) => (
-    <svg style={svgStyle(size, opacity)} viewBox="0 0 24 24" fill="none">
-        <path d="M6 9l6 6 6-6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-);
-
-const ChevronRightIcon = ({ size = "14rem", opacity = 1 }: { size?: string; opacity?: number }) => (
-    <svg style={svgStyle(size, opacity)} viewBox="0 0 24 24" fill="none">
-        <path d="M9 6l6 6-6 6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-);
-
-const SearchIcon = ({ size = "14rem", opacity = 1 }: { size?: string; opacity?: number }) => (
-    <svg style={svgStyle(size, opacity)} viewBox="0 0 24 24" fill="none">
-        <circle cx="10.5" cy="10.5" r="6.5" stroke="white" strokeWidth="2"/>
-        <path d="M15.5 15.5L20 20" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
-    </svg>
-);
-
-const ClockIcon = ({ size = "14rem", opacity = 1 }: { size?: string; opacity?: number }) => (
-    <svg style={svgStyle(size, opacity)} viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="1.8"/>
-        <path d="M12 7v5l3.5 2" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-);
-
-const FolderIcon = ({ size = "14rem", opacity = 1 }: { size?: string; opacity?: number }) => (
-    <svg style={svgStyle(size, opacity)} viewBox="0 0 24 24" fill="none">
-        <path d="M3 8a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"
-              stroke="white" strokeWidth="1.8" strokeLinejoin="round"/>
-    </svg>
-);
-
-const PinIcon = ({ size = "14rem" }: { size?: string }) => (
-    <svg style={svgStyle(size)} viewBox="0 0 100 100" fill="none">
-        <path fillRule="evenodd"
-            d="M50 5 C27 5 10 22 10 43 C10 68 50 95 50 95 C50 95 90 68 90 43 C90 22 73 5 50 5 Z M50 59 C50 59 31 46 31 34 C31 26 37 20 44 20 C47 20 49 22 50 25 C51 22 53 20 56 20 C63 20 69 26 69 34 C69 46 50 59 50 59 Z"
-            fill="white"/>
-    </svg>
-);
-
-const RemoveIcon = ({ size = "14rem" }: { size?: string }) => (
-    <svg style={svgStyle(size)} viewBox="0 0 24 24" fill="none">
-        <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
-    </svg>
-);
-
-const FilterIcon = ({ size = "13rem" }: { size?: string }) => (
-    <svg style={svgStyle(size)} viewBox="0 0 24 24" fill="none">
-        <path d="M3 4h18l-7 9v6l-4-2V13L3 4z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round"/>
-    </svg>
-);
-
-const PencilIcon = ({ size = "12rem" }: { size?: string }) => (
-    <svg style={svgStyle(size)} viewBox="0 0 24 24" fill="none">
-        <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 0 1 3.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-              stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-);
-
-const CheckboxChecked = ({ size = "15rem" }: { size?: string }) => (
-    <svg style={svgStyle(size)} viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="3" width="18" height="18" rx="3" fill={GOLD_BG} stroke={GOLD} strokeWidth="1.5"/>
-        <path d="M7 12l4 4 6-7" stroke={GOLD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-);
-
-const CheckboxUnchecked = ({ size = "15rem" }: { size?: string }) => (
-    <svg style={svgStyle(size)} viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="3" width="18" height="18" rx="3" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5"/>
-    </svg>
-);
-
-// ── CollectionRowItem ─────────────────────────────────────────────────────────
-
-interface CollectionRowProps {
-    col: CollectionData;
-    isRenaming: boolean;
-    renamingValue: string;
-    onEnter: () => void;
-    onRenameStart: () => void;
-    onRenameChange: (v: string) => void;
-    onRenameSubmit: () => void;
-    onRenameCancel: () => void;
-    onDelete: () => void;
-}
-
-const CollectionRowItem = ({
-    col, isRenaming, renamingValue,
-    onEnter, onRenameStart, onRenameChange, onRenameSubmit, onRenameCancel, onDelete,
-}: CollectionRowProps) => (
-    <div className={`${styles.collectionRow} ${isRenaming ? styles.collectionRowRenaming : ""}`}>
-        <FolderIcon size="15rem" opacity={0.7} />
-
-        {isRenaming ? (
-            <input
-                autoFocus
-                maxLength={30}
-                value={renamingValue}
-                onChange={e => onRenameChange(e.target.value)}
-                onKeyDown={e => {
-                    if (e.key === "Enter") onRenameSubmit();
-                    if (e.key === "Escape") onRenameCancel();
-                }}
-                onBlur={onRenameSubmit}
-                className={styles.renameInput}
-                onClick={e => e.stopPropagation()}
-            />
-        ) : (
-            <span onClick={onEnter} className={styles.collectionName}>{col.name}</span>
-        )}
-
-        <span className={styles.collectionCount}>
-            {col.pins.length} {col.pins.length === 1 ? "pin" : "pins"}
-        </span>
-
-        <div className={styles.rowActions}>
-            <button
-                onClick={e => { e.stopPropagation(); onRenameStart(); }}
-                className={styles.iconBtn}
-            ><PencilIcon /></button>
-            <button
-                onClick={e => { e.stopPropagation(); onDelete(); }}
-                className={`${styles.iconBtn} ${styles.iconBtnDelete}`}
-            ><CloseIcon size="12rem" /></button>
-        </div>
-
-        {!isRenaming && <ChevronRightIcon size="12rem" opacity={0.35} />}
-    </div>
-);
-
-// ── FilterTabItem ─────────────────────────────────────────────────────────────
-
-interface FilterTabProps {
-    filter: FilterData;
-    isActive: boolean;
-    isRenaming: boolean;
-    renamingValue: string;
-    onSelect: () => void;
-    onRenameStart: () => void;
-    onRenameChange: (v: string) => void;
-    onRenameSubmit: () => void;
-    onRenameCancel: () => void;
-    onDelete: () => void;
-}
-
-const FilterTabItem = ({
-    filter, isActive, isRenaming, renamingValue,
-    onSelect, onRenameStart, onRenameChange, onRenameSubmit, onRenameCancel, onDelete,
-}: FilterTabProps) => (
-    <div className={`${styles.tab} ${isActive ? styles.tabActive : ""}`}>
-        {isRenaming ? (
-            <input
-                autoFocus
-                maxLength={20}
-                value={renamingValue}
-                onChange={e => onRenameChange(e.target.value)}
-                onKeyDown={e => {
-                    if (e.key === "Enter") onRenameSubmit();
-                    if (e.key === "Escape") onRenameCancel();
-                }}
-                onBlur={onRenameSubmit}
-                className={styles.tabRenameInput}
-                onClick={e => e.stopPropagation()}
-            />
-        ) : (
-            <span onClick={onSelect}>{filter.name}</span>
-        )}
-        {!isRenaming && (
-            <div className={styles.tabActions}>
-                <button
-                    onClick={e => { e.stopPropagation(); onRenameStart(); }}
-                    className={`${styles.iconBtn} ${styles.iconBtnSm}`}
-                ><PencilIcon size="10rem" /></button>
-                <button
-                    onClick={e => { e.stopPropagation(); onDelete(); }}
-                    className={`${styles.iconBtn} ${styles.iconBtnSm} ${styles.iconBtnDelete}`}
-                ><CloseIcon size="10rem" /></button>
-            </div>
-        )}
-    </div>
-);
-
-// ── FavouriteRow ──────────────────────────────────────────────────────────────
-
-interface RowProps {
-    name: string;
-    displayName?: string;
-    thumbnail?: string;
-    collectionId: string;
-    filters: FilterData[];
-    isExpanded: boolean;
-    onToggleExpand: () => void;
-}
-
-const FavouriteRow = ({ name, displayName, thumbnail, collectionId, filters, isExpanded, onToggleExpand }: RowProps) => (
-    <div className={styles.favRow}>
-        <div className={styles.favRowInner}>
-            {thumbnail ? (
-                <img src={thumbnail} className={styles.favThumb} />
-            ) : (
-                <div className={styles.favThumbEmpty}>{"?"}</div>
-            )}
-            <span onClick={() => selectAsset(name)} className={styles.favName}>
-                {displayName || name}
-            </span>
-
-            {filters.length > 0 && (
-                <button
-                    onClick={e => { e.stopPropagation(); onToggleExpand(); }}
-                    title="Assign to filters"
-                    className={`${styles.favActionBtn} ${isExpanded ? styles.favActionBtnActive : ""}`}
-                >
-                    <FilterIcon size="13rem" />
-                </button>
-            )}
-
-            <button
-                onClick={e => { e.stopPropagation(); removeAsset(collectionId, name); }}
-                className={styles.favRemoveBtn}
-            ><RemoveIcon size="13rem" /></button>
-        </div>
-
-        {isExpanded && (
-            <div className={styles.checkboxList}>
-                {filters.map(filter => {
-                    const checked = filter.assets.includes(name);
-                    return (
-                        <div
-                            key={filter.id}
-                            onClick={() => checked
-                                ? removeFromFilter(collectionId, filter.id, name)
-                                : addToFilter(collectionId, filter.id, name)}
-                            className={`${styles.checkboxRow} ${checked ? styles.checkboxRowChecked : ""}`}
-                        >
-                            {checked ? <CheckboxChecked /> : <CheckboxUnchecked />}
-                            <span>{filter.name}</span>
-                        </div>
-                    );
-                })}
-            </div>
-        )}
-    </div>
-);
-
-// ── RecentRow ─────────────────────────────────────────────────────────────────
-// A read-only row in the auto-managed "Recently Placed" list. Clicking the name
-// re-selects the asset; the pin button opens an inline picker to copy it into one
-// of the real collections (toggling membership, like the filter checkboxes).
-
-interface RecentRowProps {
-    entry: FavouriteEntry;
-    collections: CollectionData[];
-    isPicking: boolean;
-    onTogglePick: () => void;
-}
-
-const RecentRow = ({ entry, collections, isPicking, onTogglePick }: RecentRowProps) => {
-    // Which collection's lists are expanded inside the picker (one at a time).
-    const [expandedCol, setExpandedCol] = useState<string | null>(null);
-
-    // Pin the asset into one of a collection's lists. A list is a subset of its
-    // collection, so ensure the asset is in the collection root first, then add
-    // it to the list. Unchecking only removes it from the list (stays pinned).
-    const toggleList = (col: CollectionData, filter: FilterData, inList: boolean, inCol: boolean) => {
-        if (inList) {
-            removeFromFilter(col.id, filter.id, entry.name);
-        } else {
-            if (!inCol) pinFromRecent(col.id, entry.name);
-            addToFilter(col.id, filter.id, entry.name);
-        }
-    };
-
-    return (
-        <div className={styles.favRow}>
-            <div className={styles.favRowInner}>
-                {entry.thumbnail ? (
-                    <img src={entry.thumbnail} className={styles.favThumb} />
-                ) : (
-                    <div className={styles.favThumbEmpty}>{"?"}</div>
-                )}
-                <span onClick={() => selectAsset(entry.name)} className={styles.favName}>
-                    {entry.displayName || entry.name}
-                </span>
-
-                <button
-                    onClick={e => { e.stopPropagation(); onTogglePick(); }}
-                    title="Pin to collection or list"
-                    className={`${styles.favActionBtn} ${isPicking ? styles.favActionBtnActive : ""}`}
-                >
-                    <PinIcon size="13rem" />
-                </button>
-            </div>
-
-            {isPicking && (
-                <div className={styles.checkboxList}>
-                    {collections.length === 0 ? (
-                        <div className={styles.emptyState}>{"No collections to pin into."}</div>
-                    ) : collections.map(col => {
-                        const inCol       = col.pins.some(p => p.name === entry.name);
-                        const inAnyList   = col.filters.some(f => f.assets.includes(entry.name));
-                        const isColOpen   = expandedCol === col.id;
-                        return (
-                            <div key={col.id} className={styles.pickCol}>
-                                <div
-                                    className={styles.pickColHeader}
-                                    onClick={() => setExpandedCol(isColOpen ? null : col.id)}
-                                >
-                                    {isColOpen
-                                        ? <ChevronDownIcon size="11rem" opacity={0.55} />
-                                        : <ChevronRightIcon size="11rem" opacity={0.55} />}
-                                    <span className={styles.pickColName}>{col.name}</span>
-                                    {(inCol || inAnyList) && <span className={styles.pickColDot} />}
-                                </div>
-
-                                {isColOpen && (
-                                    <div className={styles.pickSubList}>
-                                        {/* Pin to the collection root */}
-                                        <div
-                                            onClick={() => inCol
-                                                ? removeAsset(col.id, entry.name)
-                                                : pinFromRecent(col.id, entry.name)}
-                                            className={`${styles.checkboxRow} ${inCol ? styles.checkboxRowChecked : ""}`}
-                                        >
-                                            {inCol ? <CheckboxChecked /> : <CheckboxUnchecked />}
-                                            <span>{"Whole collection"}</span>
-                                        </div>
-
-                                        {/* Pin to a specific list within the collection */}
-                                        {col.filters.map(filter => {
-                                            const inList = filter.assets.includes(entry.name);
-                                            return (
-                                                <div
-                                                    key={filter.id}
-                                                    onClick={() => toggleList(col, filter, inList, inCol)}
-                                                    className={`${styles.checkboxRow} ${inList ? styles.checkboxRowChecked : ""}`}
-                                                >
-                                                    {inList ? <CheckboxChecked /> : <CheckboxUnchecked />}
-                                                    <span>{filter.name}</span>
-                                                </div>
-                                            );
-                                        })}
-
-                                        {col.filters.length === 0 && (
-                                            <div className={styles.pickNoLists}>{"No lists in this collection"}</div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
-    );
-};
+const TOAST_SECONDS = 6;
+// Long lists are drawn this many at a time, so they open quickly.
+const AUTO_PAGE = 25;
 
 // ── PinboardPanel ────────────────────────────────────────────────────────────────
 
 export const PinboardPanel = () => {
+    const t = useText();
+
     const isOpen           = useValue(panelOpen$);
     const collectionsJson  = useValue(collectionsData$);
     const currentPrefab    = useValue(currentPrefab$);
     const currentPrefabId  = useValue(currentPrefabId$);
-    const isPinned         = useValue(isPinned$);
     const recentJson       = useValue(recentlyPlaced$);
+    const mostUsedJson     = useValue(mostUsed$);
+    const layoutJson       = useValue(panelLayout$);
+    const noticeJson       = useValue(notice$);
+    const quickPinsJson    = useValue(quickPins$);
 
-    const [panelView, setPanelView]         = useState<"root" | "collection" | "recent">("root");
+    const [panelView, setPanelView]         = useState<View>("root");
     const [viewCollectionId, setViewColId]  = useState<string | null>(null);
     const [viewFilterId, setViewFilterId]   = useState<string | null>(null);
     const [expandedRow, setExpandedRow]     = useState<string | null>(null);
-    const [pickingRecent, setPickingRecent] = useState<string | null>(null);
-    const [pendingClearRecent, setPendingClearRecent] = useState(false);
+    const [movingRow, setMovingRow]         = useState<string | null>(null);
+    const [pickingRow, setPickingRow]       = useState<string | null>(null);
+    const [pendingClear, setPendingClear]   = useState<"recent" | "mostUsed" | null>(null);
     const [searchText, setSearchText]       = useState("");
+    // Recently Placed and Most Used can hold hundreds of assets. Drawing them all
+    // at once (each with its picture) made the tab slow to open, so show a page at a time.
+    const [autoLimit, setAutoLimit]         = useState(AUTO_PAGE);
+    const [rootSearch, setRootSearch]       = useState("");
     const [collapsed, setCollapsed]         = useState(false);
-    const [sortDir, setSortDir]             = useState<"asc" | "desc" | null>(null);
+    const [sortOpen, setSortOpen]           = useState(false);
     const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
     const [renaming, setRenaming]           = useState<Renaming | null>(null);
     const [newColMode, setNewColMode]       = useState(false);
     const [newColName, setNewColName]       = useState("");
+    const [importMode, setImportMode]       = useState(false);
+    const [importText, setImportText]       = useState("");
     const [newFilterMode, setNewFilterMode] = useState(false);
     const [newFilterName, setNewFilterName] = useState("");
+    const [hoverPinned, setHoverPinned]     = useState(false);
+    const [toast, setToast]                 = useState<Toast | null>(null);
+    // Where the panel is while being dragged (px). null = use the saved spot.
+    const [dragPos, setDragPos]             = useState<{ x: number; y: number } | null>(null);
 
     const listRef    = useRef<HTMLDivElement>(null);
     const colListRef = useRef<HTMLDivElement>(null);
+    const panelRef   = useRef<HTMLDivElement>(null);
+    const toastIdRef = useRef(0);
+    const lastNoticeRef = useRef(0);
+    const dragRef    = useRef<{ startX: number; startY: number; panelX: number; panelY: number; moved: boolean } | null>(null);
 
-    if (!isOpen) return null;
+    // Set once a name box has been saved or cancelled (Enter or Escape). The box
+    // loses focus straight after, and that "clicked away" would otherwise save
+    // again: re-saving a cancelled name, or creating the same collection twice.
+    const handledRef = useRef(false);
 
-    let collections: CollectionData[] = [];
-    try { collections = JSON.parse(collectionsJson); } catch {}
+    const layout = parse<PanelLayout>(layoutJson, { x: -1, y: -1, grid: false, sort: "own" });
+    const sortMode: SortMode = SORT_MODES.includes(layout.sort) ? layout.sort : "own";
 
-    let recentEntries: FavouriteEntry[] = [];
-    try { recentEntries = JSON.parse(recentJson); } catch {}
+    const showToast = (text: string, undo?: RemovedPin) => {
+        toastIdRef.current += 1;
+        setToast({ id: toastIdRef.current, text, undo });
+    };
+
+    // Messages from the game side (pin shortcut, sharing, quick-pick keys).
+    useEffect(() => {
+        const notice = parse<Notice | null>(noticeJson, null);
+        if (!notice || notice.id === lastNoticeRef.current) return;
+        lastNoticeRef.current = notice.id;
+        if (isTextKey(notice.key)) showToast(t(notice.key, ...(notice.args ?? [])));
+    }, [noticeJson]);
+
+    // Each message disappears after a few seconds.
+    useEffect(() => {
+        if (!toast) return;
+        const timer = setTimeout(() => setToast(current => current?.id === toast.id ? null : current), TOAST_SECONDS * 1000);
+        return () => clearTimeout(timer);
+    }, [toast?.id]);
+
+    // ── Dragging the panel by its title bar ──
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            const d = dragRef.current;
+            if (!d) return;
+            const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+            if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+            d.moved = true;
+            setDragPos(clampToScreen(d.panelX + dx, d.panelY + dy));
+        };
+        const onUp = () => {
+            const d = dragRef.current;
+            dragRef.current = null;
+            if (!d || !d.moved) return;
+            setDragPos(pos => {
+                if (pos) savePanelPosition(Math.round(pos.x), Math.round(pos.y));
+                return pos;
+            });
+        };
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+        return () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+        };
+    }, []);
+
+    // When the saved spot changes (or is reset), stop using the dragged position.
+    useEffect(() => { if (!dragRef.current) setDragPos(null); }, [layout.x, layout.y]);
+
+    const clampToScreen = (x: number, y: number) => {
+        const w = panelRef.current?.offsetWidth ?? 400;
+        return {
+            x: Math.max(0, Math.min(x, window.innerWidth - w)),
+            y: Math.max(0, Math.min(y, window.innerHeight - 60)),
+        };
+    };
+
+    const onHeaderMouseDown = (e: React.MouseEvent) => {
+        if (e.button !== 0 || !panelRef.current) return;
+        const rect = panelRef.current.getBoundingClientRect();
+        dragRef.current = { startX: e.clientX, startY: e.clientY, panelX: rect.left, panelY: rect.top, moved: false };
+    };
+
+    // ── Toast shown even while the panel is closed (shortcut keys) ──
+    const toastView = toast && (
+        <div className={isOpen ? styles.toast : `${styles.toast} ${styles.toastFloating}`}>
+            <span className={styles.toastText}>{toast.text}</span>
+            {toast.undo && (
+                <button
+                    className={styles.toastUndo}
+                    onClick={() => { restorePin(toast.undo!); setToast(null); }}
+                >{t("undo")}</button>
+            )}
+        </div>
+    );
+
+    if (!isOpen) return (
+        <>
+            {toastView && <Portal>{toastView}</Portal>}
+            <MissingAssetDialog t={t} />
+        </>
+    );
+
+    const collections   = parseShared<CollectionData[]>("collections", collectionsJson, []);
+    const recentEntries = parseShared<FavouriteEntry[]>("recent", recentJson, []);
+    const mostUsed      = parseShared<FavouriteEntry[]>("mostUsed", mostUsedJson, []);
+    const quickPins     = parseShared<(FavouriteEntry | null)[]>("quickPins", quickPinsJson, []);
+
+    // Everything that can go in a quick pin: all pins, then Recently Placed and Most Used, once each.
+    const quickCandidates: FavouriteEntry[] = [];
+    {
+        const seen = new Set<string>();
+        const add = (e: FavouriteEntry) => { if (e && !seen.has(e.name)) { seen.add(e.name); quickCandidates.push(e); } };
+        collections.forEach(c => c.pins.forEach(add));
+        recentEntries.forEach(add);
+        mostUsed.forEach(add);
+    }
 
     const viewCollection = panelView === "collection"
         ? (collections.find(c => c.id === viewCollectionId) ?? null)
         : null;
 
-    const effectiveView = panelView === "collection" && !viewCollection ? "root" : panelView;
+    const effectiveView: View = panelView === "collection" && !viewCollection ? "root" : panelView;
+
+    const resetRowState = () => {
+        setExpandedRow(null);
+        setMovingRow(null);
+        setPickingRow(null);
+        setSearchText("");
+        setSortOpen(false);
+        setAutoLimit(AUTO_PAGE);
+    };
 
     const navigateInto = (col: CollectionData) => {
         setViewColId(col.id);
         setPanelView("collection");
         setViewFilterId(null);
-        setExpandedRow(null);
-        setSearchText("");
-        setActiveCollection(col.id);
+        resetRowState();
     };
 
     const navigateRoot = () => {
         setPanelView("root");
         setViewFilterId(null);
-        setExpandedRow(null);
-        setSearchText("");
-        setSortDir(null);
-        setPickingRecent(null);
+        resetRowState();
     };
 
-    const navigateRecent = () => {
-        setPanelView("recent");
+    const navigateTo = (view: "recent" | "mostUsed" | "quick" | "more" | "district") => {
+        setPanelView(view);
         setViewColId(null);
         setViewFilterId(null);
-        setExpandedRow(null);
-        setPickingRecent(null);
-        setSearchText("");
-        setSortDir(null);
+        resetRowState();
     };
 
+    // Which tab a view belongs to.
+    const activeTab: Tab =
+        effectiveView === "recent" || effectiveView === "mostUsed" ? "recent"
+        : effectiveView === "quick" ? "quick"
+        : effectiveView === "more" || effectiveView === "district" ? "more"
+        : "pins";
+
+    const openTab = (tab: Tab) => {
+        setImportMode(false);
+        setImportText("");
+        if (tab === "pins") navigateRoot();
+        else if (tab === "recent") navigateTo(effectiveView === "mostUsed" ? "mostUsed" : "recent");
+        else navigateTo(tab);
+    };
+
+    const startRename = (r: Renaming) => { handledRef.current = false; setRenaming(r); };
+    const cancelRename = () => { handledRef.current = true; setRenaming(null); };
+
     const submitRename = () => {
+        if (handledRef.current) { handledRef.current = false; return; }
         if (!renaming) return;
         const v = renaming.value.trim();
         if (v) {
@@ -503,19 +267,38 @@ export const PinboardPanel = () => {
             else
                 renameFilter(renaming.collectionId, renaming.filterId, v);
         }
+        handledRef.current = true;
         setRenaming(null);
     };
 
+    const startNewCollection = () => { handledRef.current = false; setImportMode(false); setNewColMode(true); };
+    const cancelNewCollection = () => { handledRef.current = true; setNewColName(""); setNewColMode(false); };
+
     const submitNewCollection = () => {
-        const t = newColName.trim();
-        if (t) createCollection(t);
+        if (handledRef.current) { handledRef.current = false; return; }
+        const name = newColName.trim();
+        if (name) createCollection(name);
+        handledRef.current = true;
         setNewColName("");
         setNewColMode(false);
     };
 
+    const startImport = () => { setNewColMode(false); setImportMode(true); };
+    const cancelImport = () => { setImportText(""); setImportMode(false); };
+    const submitImport = () => {
+        importCollection(importText);
+        setImportText("");
+        setImportMode(false);
+    };
+
+    const startNewFilter = () => { handledRef.current = false; setNewFilterMode(true); };
+    const cancelNewFilter = () => { handledRef.current = true; setNewFilterName(""); setNewFilterMode(false); };
+
     const submitNewFilter = () => {
-        const t = newFilterName.trim();
-        if (t && viewCollectionId) createFilter(viewCollectionId, t);
+        if (handledRef.current) { handledRef.current = false; return; }
+        const name = newFilterName.trim();
+        if (name && viewCollectionId) createFilter(viewCollectionId, name);
+        handledRef.current = true;
         setNewFilterName("");
         setNewFilterMode(false);
     };
@@ -532,126 +315,256 @@ export const PinboardPanel = () => {
         setPendingDelete(null);
     };
 
+    // Removes a pin and offers "Undo" for a few seconds.
+    const removeWithUndo = (col: CollectionData, assetName: string) => {
+        const index = col.pins.findIndex(p => p.name === assetName);
+        if (index < 0) return;
+        const entry = col.pins[index];
+        const filterIds = col.filters.filter(f => f.assets.includes(assetName)).map(f => f.id);
+        removeAsset(col.id, assetName);
+        showToast(t("removedPin", nameOf(entry)), { collectionId: col.id, entry, index, filterIds });
+    };
+
+    const togglePicker = (name: string) => setPickingRow(pickingRow === name ? null : name);
+
     const handleWheel    = (e: React.WheelEvent) => { if (listRef.current)    listRef.current.scrollTop    += e.deltaY; };
     const handleColWheel = (e: React.WheelEvent) => { if (colListRef.current) colListRef.current.scrollTop += e.deltaY; };
 
+    // ── Collection view: what to show ──
     const activeFilter = viewCollection?.filters.find(f => f.id === viewFilterId) ?? null;
     const basePins     = viewCollection?.pins ?? [];
     const filtered     = activeFilter ? basePins.filter(p => activeFilter.assets.includes(p.name)) : basePins;
-    const query      = searchText.trim().toLowerCase();
-    const searched   = query ? filtered.filter(p => (p.displayName || p.name).toLowerCase().includes(query)) : filtered;
-    const sorted     = sortDir === null ? searched : [...searched].sort((a, b) => {
-        const na = (a.displayName || a.name).toLowerCase();
-        const nb = (b.displayName || b.name).toLowerCase();
-        return sortDir === "asc" ? na.localeCompare(nb) : nb.localeCompare(na);
-    });
+    const query        = searchText.trim().toLowerCase();
+    const searched     = filtered.filter(p => matches(p, query));
+    const sorted       = sortPins(searched, sortMode);
+    // Big collections are drawn a page at a time so they open quickly.
+    const visiblePins  = sorted.slice(0, autoLimit);
+    const showMore     = () => setAutoLimit(l => l + AUTO_PAGE);
+    const morePins     = <ShowMore t={t} hidden={sorted.length - visiblePins.length} onClick={showMore} />;
+    // Up/down arrows only make sense when you're looking at the whole collection in your order.
+    const canReorder   = sortMode === "own" && !query && !activeFilter;
+    // The "+ Pin" button works on the collection being viewed, so check that one.
+    const isPinnedHere = !!viewCollection && viewCollection.pins.some(p => p.name === currentPrefabId);
+
+    // ── Search everywhere (main screen) ──
+    const rootQuery = rootSearch.trim().toLowerCase();
+    const searchResults: { entry: FavouriteEntry; where: string[] }[] = [];
+    if (rootQuery) {
+        const byName = new Map<string, { entry: FavouriteEntry; where: string[] }>();
+        const add = (entry: FavouriteEntry, where: string) => {
+            if (!matches(entry, rootQuery)) return;
+            const found = byName.get(entry.name);
+            if (found) { if (!found.where.includes(where)) found.where.push(where); }
+            else { const item = { entry, where: [where] }; byName.set(entry.name, item); searchResults.push(item); }
+        };
+        collections.forEach(c => c.pins.forEach(p => add(p, c.name)));
+        recentEntries.forEach(p => add(p, t("recentlyPlaced")));
+        mostUsed.forEach(p => add(p, t("mostUsed")));
+    }
+
+    const panelStyle: React.CSSProperties | undefined = dragPos
+        ? { left: `${dragPos.x}px`, top: `${dragPos.y}px`, right: "auto" }
+        : layout.x >= 0 && layout.y >= 0
+            ? (() => { const p = clampToScreen(layout.x, layout.y); return { left: `${p.x}px`, top: `${p.y}px`, right: "auto" }; })()
+            : undefined;
+
+    // ── Pieces shared by the list views ──
+    const gridToggle = (
+        <IconButton
+            tip={layout.grid ? t("tipList") : t("tipGrid")}
+            onClick={() => setGridView(!layout.grid)}
+            className={`${styles.viewBtn} ${layout.grid ? styles.viewBtnActive : ""}`}
+        >{layout.grid ? <ListIcon /> : <GridIcon />}</IconButton>
+    );
+
+    // A list of auto-managed assets (Recently Placed, Most Used) with a pin picker per row.
+    const autoList = (entries: FavouriteEntry[], subtitle: (e: FavouriteEntry) => string, emptyText: string) => {
+        const matching = entries.filter(e => matches(e, query));
+        const shown = matching.slice(0, autoLimit);
+        if (entries.length === 0) return <div className={styles.emptyState}>{emptyText}</div>;
+        if (matching.length === 0) return <div className={styles.emptyState}>{t("noMatches")}</div>;
+        const more = <ShowMore t={t} hidden={matching.length - shown.length} onClick={showMore} />;
+        if (layout.grid) return <><AssetGrid entries={shown} currentId={currentPrefabId} />{more}</>;
+        return (
+            <div className={styles.pinList}>
+                {shown.map(entry => (
+                    <AssetRow
+                        key={entry.name}
+                        entry={entry}
+                        subtitle={subtitle(entry)}
+                        isCurrent={entry.name === currentPrefabId}
+                        actions={
+                            <PinPickerButton t={t} open={pickingRow === entry.name} onClick={() => togglePicker(entry.name)} />
+                        }
+                        expanded={pickingRow === entry.name && <PinPicker entry={entry} collections={collections} t={t} />}
+                    />
+                ))}
+                {more}
+            </div>
+        );
+    };
 
     return (
         <>
-        <div className={`${styles.panel} ${collapsed ? styles.panelCollapsed : styles.panelExpanded}`}>
+        <div
+            ref={panelRef}
+            style={panelStyle}
+            className={`${styles.panel} ${collapsed ? styles.panelCollapsed : styles.panelExpanded}`}
+        >
 
-            {/* ── Header ── */}
-            <div className={`${styles.header} ${collapsed ? styles.headerCollapsed : ""}`}>
+            {/* ── Header (drag it to move the panel, double-click to put it back) ── */}
+            <div
+                className={`${styles.header} ${collapsed ? styles.headerCollapsed : ""}`}
+                onMouseDown={onHeaderMouseDown}
+                onDoubleClick={() => { dragRef.current = null; setDragPos(null); savePanelPosition(-1, -1); }}
+            >
                 <PinIcon size="18rem" />
-                <span className={styles.headerTitle}>{"Pinboard"}</span>
+                <Tooltip tooltip={t("tipDrag")}>
+                    <span className={styles.headerTitle}>{t("title")}</span>
+                </Tooltip>
 
                 {effectiveView === "collection" && currentPrefab && (
                     <div
-                        className={isPinned ? styles.pinBtnPinned : styles.pinBtn}
-                        onClick={isPinned
-                            ? () => removeAsset(viewCollectionId!, currentPrefabId)
-                            : pinCurrentAsset}
+                        onMouseDown={e => e.stopPropagation()}
+                        onDoubleClick={e => e.stopPropagation()}
+                        onMouseEnter={() => setHoverPinned(true)}
+                        onMouseLeave={() => setHoverPinned(false)}
                     >
-                        {isPinned ? "Pinned" : "+ Pin"}
+                        <Tooltip tooltip={isPinnedHere ? t("tipUnpinButton") : t("tipPinButton")}>
+                            <div
+                                className={isPinnedHere ? styles.pinBtnPinned : styles.pinBtn}
+                                onClick={isPinnedHere
+                                    ? () => removeWithUndo(viewCollection!, currentPrefabId)
+                                    : () => pinCurrentAsset(viewCollectionId!)}
+                            >
+                                {isPinnedHere ? (hoverPinned ? t("unpin") : t("pinned")) : t("pin")}
+                            </div>
+                        </Tooltip>
                     </div>
                 )}
 
-                <button className={styles.ctrlBtn} onClick={() => setCollapsed(c => !c)}>
-                    {collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
-                </button>
-                <button className={styles.ctrlBtn} onClick={close}>
-                    <CloseIcon />
-                </button>
+                <div onMouseDown={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()} className={styles.headerButtons}>
+                    <IconButton tip={collapsed ? t("tipExpand") : t("tipCollapse")} onClick={() => setCollapsed(c => !c)} className={styles.ctrlBtn}>
+                        {collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
+                    </IconButton>
+                    <IconButton tip={t("tipClose")} onClick={togglePanel} className={styles.ctrlBtn}>
+                        <CloseIcon />
+                    </IconButton>
+                </div>
             </div>
+
+            {/* ── Tabs ── */}
+            {!collapsed && (
+                <div className={styles.mainTabBar}>
+                    {([
+                        ["pins", t("tabPins"), t("tipTabPins"), <FolderIcon size="13rem" />],
+                        ["recent", t("tabRecent"), t("tipTabRecent"), <ClockIcon size="13rem" />],
+                        ["quick", t("tabQuick"), t("tipTabQuick"), <StarIcon size="13rem" />],
+                        ["more", t("tabMore"), t("tipTabMore"), <ShareIcon size="12rem" />],
+                    ] as [Tab, string, string, JSX.Element][]).map(([tab, label, tip, icon]) => (
+                        <Tooltip key={tab} tooltip={tip}>
+                            <div
+                                className={`${styles.mainTab} ${activeTab === tab ? styles.mainTabActive : ""}`}
+                                onClick={() => openTab(tab)}
+                            >
+                                {icon}
+                                <span>{label}</span>
+                            </div>
+                        </Tooltip>
+                    ))}
+                </div>
+            )}
 
             {/* ── Root view ── */}
             {!collapsed && effectiveView === "root" && (
                 <>
-                    <div className={styles.sectionBar}>{"COLLECTIONS"}</div>
+                    <div className={styles.searchRow}>
+                        <SearchBox value={rootSearch} onChange={setRootSearch} placeholder={t("searchEverywhere")} />
+                    </div>
 
                     <div ref={colListRef} onWheel={handleColWheel} className={`${styles.scrollArea} pinboard-scroll`}>
-                        {/* Auto-managed "Recently Placed" folder, pinned at the top */}
-                        <div
-                            className={`${styles.collectionRow} ${styles.recentFolderRow}`}
-                            onClick={navigateRecent}
-                        >
-                            <ClockIcon size="15rem" opacity={0.85} />
-                            <span className={styles.collectionName}>{"Recently Placed"}</span>
-                            <span className={styles.collectionCount}>
-                                {recentEntries.length} {recentEntries.length === 1 ? "item" : "items"}
-                            </span>
-                            <div className={styles.rowActionsSpacer} />
-                            <ChevronRightIcon size="12rem" opacity={0.35} />
-                        </div>
-
-                        {collections.length === 0 && (
-                            <div className={styles.emptyState}>{"No collections yet."}</div>
-                        )}
-
-                        {collections.map(col => {
-                            const isRenamingThis = renaming?.kind === "collection" && renaming.id === col.id;
-                            return (
-                                <CollectionRowItem
-                                    key={col.id}
-                                    col={col}
-                                    isRenaming={isRenamingThis}
-                                    renamingValue={isRenamingThis ? (renaming as any).value : col.name}
-                                    onEnter={() => navigateInto(col)}
-                                    onRenameStart={() => setRenaming({ kind: "collection", id: col.id, value: col.name })}
-                                    onRenameChange={v => setRenaming(r => r ? { ...r, value: v } : null)}
-                                    onRenameSubmit={submitRename}
-                                    onRenameCancel={() => setRenaming(null)}
-                                    onDelete={() => setPendingDelete({ kind: "collection", id: col.id, name: col.name })}
-                                />
-                            );
-                        })}
-
-                        <div className={styles.newItemRow}>
-                            {newColMode ? (
-                                <input
-                                    autoFocus
-                                    maxLength={30}
-                                    value={newColName}
-                                    onChange={e => setNewColName(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === "Enter") submitNewCollection();
-                                        if (e.key === "Escape") { setNewColName(""); setNewColMode(false); }
-                                    }}
-                                    onBlur={submitNewCollection}
-                                    placeholder="Collection name..."
-                                    className={`${styles.renameInput} ${styles.renameInputFull}`}
-                                />
+                        {rootQuery ? (
+                            searchResults.length === 0 ? (
+                                <div className={styles.emptyState}>{t("noMatches")}</div>
                             ) : (
-                                <div className={styles.newItemTrigger} onClick={() => setNewColMode(true)}>
-                                    {"+ New Collection"}
+                                <div className={styles.pinList}>
+                                    {searchResults.map(({ entry, where }) => (
+                                        <AssetRow
+                                            key={entry.name}
+                                            entry={entry}
+                                            subtitle={t("inCollections", where.join(", "))}
+                                            isCurrent={entry.name === currentPrefabId}
+                                            actions={
+                                                <PinPickerButton t={t} open={pickingRow === entry.name} onClick={() => togglePicker(entry.name)} />
+                                            }
+                                            expanded={pickingRow === entry.name && <PinPicker entry={entry} collections={collections} t={t} />}
+                                        />
+                                    ))}
                                 </div>
-                            )}
-                        </div>
+                            )
+                        ) : (
+                            <>
+                                <div className={styles.sectionBar}>{t("collections")}</div>
+
+                                {collections.length === 0 && (
+                                    <div className={styles.emptyState}>{t("emptyCollections")}</div>
+                                )}
+
+                                {collections.map((col, i) => {
+                                    const isRenamingThis = renaming?.kind === "collection" && renaming.id === col.id;
+                                    return (
+                                        <CollectionRowItem
+                                            key={col.id}
+                                            col={col}
+                                            t={t}
+                                            isFirst={i === 0}
+                                            isLast={i === collections.length - 1}
+                                            isRenaming={isRenamingThis}
+                                            renamingValue={isRenamingThis ? renaming!.value : col.name}
+                                            onEnter={() => navigateInto(col)}
+                                            onRenameStart={() => startRename({ kind: "collection", id: col.id, value: col.name })}
+                                            onRenameChange={v => setRenaming(r => r ? { ...r, value: v } : null)}
+                                            onRenameSubmit={submitRename}
+                                            onRenameCancel={cancelRename}
+                                            onDelete={() => setPendingDelete({ kind: "collection", id: col.id, name: col.name })}
+                                        />
+                                    );
+                                })}
+
+                                <div className={styles.newItemRow}>
+                                    {newColMode ? (
+                                        <NameInput
+                                            maxLength={MAX_COLLECTION_NAME}
+                                            value={newColName}
+                                            onChange={setNewColName}
+                                            onSubmit={submitNewCollection}
+                                            onCancel={cancelNewCollection}
+                                            placeholder={t("collectionNamePlaceholder")}
+                                            className={`${styles.renameInput} ${styles.renameInputFull}`}
+                                        />
+                                    ) : (
+                                        <div className={styles.newItemTrigger} onClick={startNewCollection}>
+                                            {t("newCollection")}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </>
             )}
 
             {/* ── Collection view ── */}
-            {!collapsed && effectiveView === "collection" && (
+            {!collapsed && effectiveView === "collection" && viewCollection && (
                 <>
-                    {/* Breadcrumb */}
-                    <div className={styles.sectionBarFlex}>
-                        <span
-                            className={styles.breadcrumbLink}
-                            onClick={navigateRoot}
-                        >{"Collections"}</span>
-                        <ChevronRightIcon size="9rem" opacity={0.4} />
-                        <span className={styles.breadcrumbCurrent}>{viewCollection?.name ?? ""}</span>
+                    {/* Breadcrumb + share */}
+                    <div className={`${styles.sectionBarFlex} ${styles.sectionBarFlexBetween}`}>
+                        <div className={styles.breadcrumbGroup}>
+                            <span className={styles.breadcrumbLink} onClick={navigateRoot}>{t("collections")}</span>
+                            <ChevronRightIcon size="9rem" opacity={0.4} />
+                            <span className={styles.breadcrumbCurrent}>{viewCollection.name}</span>
+                        </div>
+                        <IconButton tip={t("tipShare")} onClick={() => exportCollection(viewCollection.id)}><ShareIcon size="14rem" /></IconButton>
                     </div>
 
                     {/* Filter tabs */}
@@ -660,174 +573,285 @@ export const PinboardPanel = () => {
                             className={`${styles.tab} ${viewFilterId === null ? styles.tabActive : ""}`}
                             onClick={() => setViewFilterId(null)}
                         >
-                            {"All Pins"}
+                            {t("allPins")}
                         </div>
 
-                        {viewCollection?.filters.map(filter => {
+                        {viewCollection.filters.map(filter => {
                             const isRenamingThis = renaming?.kind === "filter" && renaming.filterId === filter.id;
                             return (
                                 <FilterTabItem
                                     key={filter.id}
                                     filter={filter}
+                                    t={t}
                                     isActive={viewFilterId === filter.id}
                                     isRenaming={isRenamingThis}
-                                    renamingValue={isRenamingThis ? (renaming as any).value : filter.name}
+                                    renamingValue={isRenamingThis ? renaming!.value : filter.name}
                                     onSelect={() => setViewFilterId(filter.id)}
-                                    onRenameStart={() => setRenaming({ kind: "filter", collectionId: viewCollectionId!, filterId: filter.id, value: filter.name })}
+                                    onRenameStart={() => startRename({ kind: "filter", collectionId: viewCollection.id, filterId: filter.id, value: filter.name })}
                                     onRenameChange={v => setRenaming(r => r ? { ...r, value: v } : null)}
                                     onRenameSubmit={submitRename}
-                                    onRenameCancel={() => setRenaming(null)}
-                                    onDelete={() => setPendingDelete({ kind: "filter", collectionId: viewCollectionId!, filterId: filter.id, name: filter.name })}
+                                    onRenameCancel={cancelRename}
+                                    onDelete={() => setPendingDelete({ kind: "filter", collectionId: viewCollection.id, filterId: filter.id, name: filter.name })}
                                 />
                             );
                         })}
 
                         {newFilterMode ? (
-                            <input
-                                autoFocus
-                                maxLength={20}
+                            <NameInput
+                                maxLength={MAX_FILTER_NAME}
                                 value={newFilterName}
-                                onChange={e => setNewFilterName(e.target.value)}
-                                onKeyDown={e => {
-                                    if (e.key === "Enter") submitNewFilter();
-                                    if (e.key === "Escape") { setNewFilterName(""); setNewFilterMode(false); }
-                                }}
-                                onBlur={submitNewFilter}
-                                placeholder="Filter name..."
+                                onChange={setNewFilterName}
+                                onSubmit={submitNewFilter}
+                                onCancel={cancelNewFilter}
+                                placeholder={t("filterNamePlaceholder")}
                                 className={`${styles.tabRenameInput} ${styles.tabRenameInputWide}`}
                             />
                         ) : (
-                            <div
-                                className={`${styles.tab} ${styles.tabNew}`}
-                                onClick={() => setNewFilterMode(true)}
-                            >{"+ New Filter"}</div>
+                            <div className={`${styles.tab} ${styles.tabNew}`} onClick={startNewFilter}>{t("newFilter")}</div>
                         )}
                     </div>
 
-                    {/* Search + Sort */}
+                    {/* Search + sort + grid/list */}
                     <div className={styles.searchRow}>
-                        <div className={styles.searchWrap}>
-                            <div className={styles.searchIconWrap}>
-                                <SearchIcon size="13rem" opacity={0.5} />
-                            </div>
-                            <input
-                                value={searchText}
-                                onChange={e => setSearchText(e.target.value)}
-                                placeholder="Search pins..."
-                                className={styles.searchInput}
-                            />
-                            {searchText && (
-                                <div className={styles.searchClear} onClick={() => setSearchText("")}>
-                                    <CloseIcon size="12rem" />
-                                </div>
-                            )}
+                        <SearchBox value={searchText} onChange={setSearchText} placeholder={t("searchPins")} />
+                        <div className={styles.sortWrap}>
+                            <Tooltip tooltip={t("tipSort")}>
+                                <button
+                                    onClick={() => setSortOpen(o => !o)}
+                                    className={`${styles.sortBtn} ${sortMode !== "own" ? styles.sortBtnActive : ""}`}
+                                >
+                                    <span>{sortLabel(t, sortMode)}</span>
+                                    <ChevronDownIcon size="10rem" opacity={0.6} />
+                                </button>
+                            </Tooltip>
                         </div>
-                        <button
-                            onClick={() => setSortDir(d => d === null ? "asc" : d === "asc" ? "desc" : null)}
-                            className={`${styles.sortBtn} ${sortDir !== null ? styles.sortBtnActive : ""}`}
-                        >
-                            {sortDir === "desc" ? "Z→A" : "A→Z"}
-                        </button>
+                        {gridToggle}
                     </div>
+                    {/* Sort choices open as a row under the search bar, so a short panel never cuts them off. */}
+                    {sortOpen && (
+                        <div className={styles.sortMenu}>
+                            {SORT_MODES.map(mode => (
+                                <div
+                                    key={mode}
+                                    className={`${styles.sortOption} ${mode === sortMode ? styles.sortOptionActive : ""}`}
+                                    onClick={() => { setSortMode(mode); setSortOpen(false); }}
+                                >{sortLabel(t, mode)}</div>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Pin list */}
                     <div ref={listRef} onWheel={handleWheel} className={`${styles.scrollArea} pinboard-scroll`}>
                         {sorted.length === 0 ? (
                             <div className={styles.emptyState}>
-                                {query ? "No matches." : viewFilterId ? "No pins in this filter." : "No pins yet."}
+                                {query ? t("noMatches") : viewFilterId ? t("emptyFilter") : t("emptyPins")}
                             </div>
+                        ) : layout.grid ? (
+                            <><AssetGrid entries={visiblePins} currentId={currentPrefabId} />{morePins}</>
                         ) : (
                             <div className={styles.pinList}>
-                                {sorted.map(entry => (
-                                    <FavouriteRow
-                                        key={entry.name}
-                                        name={entry.name}
-                                        displayName={entry.displayName}
-                                        thumbnail={entry.thumbnail}
-                                        collectionId={viewCollectionId!}
-                                        filters={viewCollection?.filters ?? []}
-                                        isExpanded={expandedRow === entry.name}
-                                        onToggleExpand={() => setExpandedRow(expandedRow === entry.name ? null : entry.name)}
-                                    />
-                                ))}
+                                {visiblePins.map((entry, i) => {
+                                    const isExpanded = expandedRow === entry.name;
+                                    const isMoving = movingRow === entry.name;
+                                    return (
+                                        <AssetRow
+                                            key={entry.name}
+                                            entry={entry}
+                                            subtitle={detailsOf(t, entry)}
+                                            isCurrent={entry.name === currentPrefabId}
+                                            actions={<>
+                                                {canReorder && (
+                                                    <IconButton
+                                                        tip={t("tipMoveUp")}
+                                                        onClick={() => i > 0 && movePin(viewCollection.id, entry.name, -1)}
+                                                        className={`${styles.favActionBtn} ${i === 0 ? styles.hiddenBtn : ""}`}
+                                                    ><ChevronUpIcon size="13rem" /></IconButton>
+                                                )}
+                                                {canReorder && (
+                                                    <IconButton
+                                                        tip={t("tipMoveDown")}
+                                                        onClick={() => i < sorted.length - 1 && movePin(viewCollection.id, entry.name, 1)}
+                                                        className={`${styles.favActionBtn} ${i === sorted.length - 1 ? styles.hiddenBtn : ""}`}
+                                                    ><ChevronDownIcon size="13rem" /></IconButton>
+                                                )}
+                                                {viewCollection.filters.length > 0 && (
+                                                    <IconButton
+                                                        tip={t("tipFilters")}
+                                                        onClick={() => { setMovingRow(null); setExpandedRow(isExpanded ? null : entry.name); }}
+                                                        className={`${styles.favActionBtn} ${isExpanded ? styles.favActionBtnActive : ""}`}
+                                                    ><FilterIcon size="13rem" /></IconButton>
+                                                )}
+                                                <IconButton
+                                                    tip={t("tipMoveCopy")}
+                                                    onClick={() => { setExpandedRow(null); setMovingRow(isMoving ? null : entry.name); }}
+                                                    className={`${styles.favActionBtn} ${isMoving ? styles.favActionBtnActive : ""}`}
+                                                ><MoveIcon size="13rem" /></IconButton>
+                                                <IconButton
+                                                    tip={t("tipRemovePin")}
+                                                    onClick={() => removeWithUndo(viewCollection, entry.name)}
+                                                    className={styles.favRemoveBtn}
+                                                ><CloseIcon size="13rem" /></IconButton>
+                                            </>}
+                                            expanded={isExpanded ? (
+                                                <div className={styles.checkboxList}>
+                                                    {viewCollection.filters.map(filter => {
+                                                        const checked = filter.assets.includes(entry.name);
+                                                        return (
+                                                            <div
+                                                                key={filter.id}
+                                                                onClick={() => checked
+                                                                    ? removeFromFilter(viewCollection.id, filter.id, entry.name)
+                                                                    : addToFilter(viewCollection.id, filter.id, entry.name)}
+                                                                className={`${styles.checkboxRow} ${checked ? styles.checkboxRowChecked : ""}`}
+                                                            >
+                                                                {checked ? <CheckboxChecked /> : <CheckboxUnchecked />}
+                                                                <span>{filter.name}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : isMoving ? (
+                                                <MoveCopyPicker entry={entry} from={viewCollection} collections={collections} t={t} onDone={() => setMovingRow(null)} />
+                                            ) : undefined}
+                                        />
+                                    );
+                                })}
+                                {morePins}
+                                {!canReorder && sortMode !== "own" && !query && (
+                                    <div className={styles.hint}>{t("reorderHint")}</div>
+                                )}
                             </div>
                         )}
                     </div>
                 </>
             )}
 
-            {/* ── Recently Placed view ── */}
-            {!collapsed && effectiveView === "recent" && (
+            {/* ── Recently Placed and Most Used views ── */}
+            {!collapsed && (effectiveView === "recent" || effectiveView === "mostUsed") && (
                 <>
-                    {/* Breadcrumb + clear */}
                     <div className={`${styles.sectionBarFlex} ${styles.sectionBarFlexBetween}`}>
-                        <div className={styles.breadcrumbGroup}>
-                            <span className={styles.breadcrumbLink} onClick={navigateRoot}>{"Collections"}</span>
-                            <ChevronRightIcon size="9rem" opacity={0.4} />
-                            <span className={styles.breadcrumbCurrent}>{"Recently Placed"}</span>
+                        <div className={styles.segmented}>
+                            {(["recent", "mostUsed"] as const).map(v => (
+                                <div
+                                    key={v}
+                                    className={`${styles.segment} ${effectiveView === v ? styles.segmentActive : ""}`}
+                                    onClick={() => effectiveView !== v && navigateTo(v)}
+                                >
+                                    {v === "recent" ? t("recentlyPlaced") : t("mostUsed")}
+                                    <span className={styles.segmentCount}>{(v === "recent" ? recentEntries : mostUsed).length}</span>
+                                </div>
+                            ))}
                         </div>
-                        {recentEntries.length > 0 && (
-                            <button
-                                className={styles.clearRecentBtn}
-                                onClick={() => setPendingClearRecent(true)}
-                            >{"Clear"}</button>
+                        {(effectiveView === "recent" ? recentEntries : mostUsed).length > 0 && (
+                            <button className={styles.clearRecentBtn} onClick={() => setPendingClear(effectiveView)}>{t("clear")}</button>
                         )}
+                    </div>
+
+                    <div className={styles.searchRow}>
+                        <SearchBox value={searchText} onChange={setSearchText} placeholder={t("searchList")} />
+                        {gridToggle}
                     </div>
 
                     <div ref={listRef} onWheel={handleWheel} className={`${styles.scrollArea} pinboard-scroll`}>
-                        {recentEntries.length === 0 ? (
-                            <div className={styles.emptyState}>
-                                {"Nothing placed yet. Assets you build with will appear here."}
-                            </div>
-                        ) : (
-                            <div className={styles.pinList}>
-                                {recentEntries.map(entry => (
-                                    <RecentRow
-                                        key={entry.name}
-                                        entry={entry}
-                                        collections={collections}
-                                        isPicking={pickingRecent === entry.name}
-                                        onTogglePick={() => setPickingRecent(pickingRecent === entry.name ? null : entry.name)}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                        {effectiveView === "recent"
+                            ? autoList(recentEntries, e => detailsOf(t, e), t("emptyRecent"))
+                            : autoList(mostUsed, e => detailsOf(t, e, (e.uses ?? 0) === 1 ? t("placedTimes1") : t("placedTimesN", e.uses ?? 0)), t("emptyMostUsed"))}
                     </div>
                 </>
             )}
+
+            {/* ── Quick pins ── */}
+            {!collapsed && effectiveView === "quick" && (
+                <div ref={listRef} onWheel={handleWheel} className={`${styles.scrollArea} pinboard-scroll`}>
+                    <QuickPinsView
+                        t={t}
+                        slots={quickPins}
+                        candidates={quickCandidates}
+                        currentId={currentPrefabId}
+                        currentName={currentPrefab}
+                    />
+                </div>
+            )}
+
+            {/* ── More: the things you don't need every day ── */}
+            {!collapsed && effectiveView === "more" && (
+                <div className={`${styles.scrollArea} pinboard-scroll`}>
+                    <div className={styles.newItemRow}>
+                        {importMode ? (
+                            <NameInput
+                                value={importText}
+                                onChange={setImportText}
+                                onSubmit={submitImport}
+                                onCancel={cancelImport}
+                                onBlur={cancelImport}
+                                placeholder={t("importPlaceholder")}
+                                className={`${styles.renameInput} ${styles.renameInputFull}`}
+                            />
+                        ) : (
+                            <div className={styles.newItemTrigger} onClick={startImport}>
+                                <ShareIcon size="12rem" />
+                                <span>{t("importCollection")}</span>
+                            </div>
+                        )}
+                        <div className={styles.newItemTrigger} onClick={() => navigateTo("district")}>
+                            <FolderIcon size="12rem" />
+                            <span>{t("districtOpen")}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Pin everything in a district ── */}
+            {!collapsed && effectiveView === "district" && (
+                <>
+                    <div className={styles.sectionBarFlex}>
+                        <span className={styles.breadcrumbLink} onClick={() => navigateTo("more")}>{t("tabMore")}</span>
+                        <ChevronRightIcon size="9rem" opacity={0.4} />
+                        <span className={styles.breadcrumbCurrent}>{t("districtTitle")}</span>
+                    </div>
+                    <div ref={listRef} onWheel={handleWheel} className={`${styles.scrollArea} pinboard-scroll`}>
+                        <DistrictView
+                            t={t}
+                            collections={collections}
+                            onDone={id => {
+                                const col = id ? collections.find(c => c.id === id) : undefined;
+                                if (col) navigateInto(col); else navigateRoot();
+                            }}
+                        />
+                    </div>
+                </>
+            )}
+
+            {toastView}
         </div>
 
-        {/* ── Confirmation dialog — native game dialog, portaled out of the overflow:hidden panel ── */}
+        {/* ── Pop-up dialogs ── */}
         {pendingDelete !== null && (
-            <Portal>
-                <ConfirmationDialog
-                    title={pendingDelete.kind === "collection" ? "Delete Collection" : "Delete Filter"}
-                    message={pendingDelete.kind === "collection"
-                        ? `Delete collection '${pendingDelete.name}'? All pins and filters inside will be removed.`
-                        : `Delete filter '${pendingDelete.name}'? Pins will remain in the collection.`}
-                    confirm={"Delete"}
-                    cancel={"Cancel"}
-                    multiline={true}
-                    onConfirm={() => confirmDelete()}
-                    onCancel={() => setPendingDelete(null)}
-                />
-            </Portal>
+            <ConfirmDialog
+                title={pendingDelete.kind === "collection" ? t("deleteCollectionTitle") : t("deleteFilterTitle")}
+                message={pendingDelete.kind === "collection"
+                    ? t("deleteCollectionMessage", pendingDelete.name)
+                    : t("deleteFilterMessage", pendingDelete.name)}
+                confirm={t("delete")}
+                cancel={t("cancel")}
+                onConfirm={confirmDelete}
+                onCancel={() => setPendingDelete(null)}
+            />
         )}
 
-        {/* ── Clear Recently Placed confirmation ── */}
-        {pendingClearRecent && (
-            <Portal>
-                <ConfirmationDialog
-                    title={"Clear Recently Placed"}
-                    message={"Clear the entire Recently Placed list? Your collections and pins are not affected."}
-                    confirm={"Clear"}
-                    cancel={"Cancel"}
-                    multiline={true}
-                    onConfirm={() => { clearRecent(); setPendingClearRecent(false); }}
-                    onCancel={() => setPendingClearRecent(false)}
-                />
-            </Portal>
+        {pendingClear !== null && (
+            <ConfirmDialog
+                title={pendingClear === "recent" ? t("clearRecentTitle") : t("clearMostUsedTitle")}
+                message={pendingClear === "recent" ? t("clearRecentMessage") : t("clearMostUsedMessage")}
+                confirm={t("clear")}
+                cancel={t("cancel")}
+                onConfirm={() => { if (pendingClear === "recent") clearRecent(); else clearMostUsed(); setPendingClear(null); }}
+                onCancel={() => setPendingClear(null)}
+            />
         )}
+
+        <MissingAssetDialog t={t} />
+        <ShareCodeDialog t={t} />
         </>
     );
 };

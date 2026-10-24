@@ -8,7 +8,6 @@ type PropsSection = {
 
 const registryIndex = {
     Section:        ["game-ui/game/components/tool-options/mouse-tool-options/mouse-tool-options.tsx", "Section"],
-    toolButtonTheme:["game-ui/game/components/tool-options/tool-button/tool-button.module.scss",       "classes"],
     FOCUS_DISABLED: ["game-ui/common/focus/focus-key.ts",                                             "FOCUS_DISABLED"],
 } as const;
 
@@ -25,13 +24,20 @@ export class VanillaComponentResolver {
 
     constructor(registry: ModuleRegistry) { this.reg = registry; }
 
+    // Returns undefined (instead of throwing) if a game update moved or renamed
+    // the piece we're looking for, so callers can skip their extra UI safely.
     private get<K extends keyof typeof registryIndex>(key: K) {
         if (this.cache[key]) return this.cache[key];
         const [path, name] = registryIndex[key];
-        return (this.cache[key] = (this.reg.registry.get(path) as any)[name]);
+        const module = this.reg.registry.get(path) as any;
+        return (this.cache[key] = module ? module[name] : undefined);
+    }
+
+    // True when everything the tool-options section needs is still in the game.
+    public get isAvailable(): boolean {
+        return !!this.Section;
     }
 
     public get Section():         (props: PropsSection)    => JSX.Element { return this.get("Section"); }
-    public get toolButtonTheme(): any { return this.get("toolButtonTheme"); }
     public get FOCUS_DISABLED():  any { return this.get("FOCUS_DISABLED"); }
 }

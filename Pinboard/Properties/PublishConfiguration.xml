@@ -1,38 +1,58 @@
 ﻿<Publish>
 	<!--Id must be set in order to update existed mod. it is not required for publishing mod for the first time-->
+	<!--Pinboard 2.0 is an update to the existing Pinboard page. Publish with PublishNewVersion, never PublishNewMod.-->
 	<ModId Value="146902" />
 	<!--Name of the mod to display to players-->
 	<DisplayName Value="Pinboard" />
 	<!--Short description of the mod-->
-	<ShortDescription Value="Pin your favourite assets and organise them into collections and filters for instant access." />
+	<ShortDescription Value="Pin your favourite assets into collections, filters and quick keys, and pick them up again in one click." />
 	<!--Long description of the mod. Single line or multi line. Supports minimal markdown subset-->
 	<!--LongDescription Value="This is a long description" /-->
 	<LongDescription>
 # Pinboard
 
-A quality-of-life mod that allows you to pin any asset and organize your pins into named collections and filters, so the assets you actually use are always a click away instead of buried in the build menus.
+Pin the assets you actually use and get back to them in one click, instead of digging through the build menus every time.
+
+Pinboard 2.0 is a big update: a new look that matches the game, tabs, quick keys, sharing, and much more. Your existing pins, collections and filters carry over automatically.
 
 ## Features
 
-- **Pin any asset:** Buildings, props, trees, network pieces, and more. Pin the selected asset straight from the tool options panel, or remove it just as quickly.
-- **Collections:** Group your pins into as many named collections as you like (e.g. Downtown, Suburbs, Industrial).
-- **Filters:** within a collection, create funnel-style filters to slice your pins into sub-groups. A pin can belong to multiple filters.
-- **Recently Placed:** A built-in, auto-managed list at the top of the panel that tracks assets as you build with them, so you never lose track of what you just used. Pin any recent item straight into a collection or a specific filter.
-- **Quick access panel:** A floating button opens the Pinboard panel and click any pin to instantly activate that asset's placement tool.
-- **Search and sort:** Filter your pins by name and sort A-Z / Z-A.
+- **Pin anything you can place:** buildings, props, trees, roads, surfaces, zones and terrain brushes. Pin from the tool options box, from the side info panel when you click something in your city, or with Ctrl + Shift + B.
+- **Collections and filters:** sort your pins into as many named collections as you like, and split each one with filters. A pin can sit in several filters.
+- **Quick pins:** choose nine favourites and pick them up with Alt + 1 to 9, even with the panel closed. They also sit in the tool options box.
+- **Recently Placed and Most Used:** Pinboard keeps track of what you build so you never lose it. Choose which kinds of things it tracks in Options.
+- **Search everything:** one search box looks through every collection, Recently Placed and Most Used.
+- **Share collections:** turn a collection into a share code to paste on Discord, and import other players' codes. Pinboard tells you which content pack or Paradox Mods asset each pin needs.
+- **Pin a whole district:** pin every building, prop, tree or road in a district in one go.
+- **Your way:** reorder pins and collections, move or copy pins, undo a removal, sort five ways, switch to a grid of pictures, and drag the panel wherever you like.
+- **Looks native:** uses the game's own colours and styling and follows your interface settings.
 
-I made this mod for myself, as I am the type of player that has a tonne of custom assets but always go back to a select few across multiple builds and wanted some sort of favourite filing collection. As a little disclaimer I have little experience coding, but my partner, who does code and Claude helped build this. I have done a quick test on the 1.6.2f1 patch and against popular mods and have not seen any issues but any feedback is appreciated!
+## Good to know
+
+- Open the panel with the pin button at the top right, or Ctrl + B. All shortcuts can be changed in Options.
+- Zoned buildings (houses, shops, offices) can be pinned, but the game only keeps them on matching zoning unless you use a mod like Plop the Growables.
+- If an asset from a mod or content pack isn't installed, Pinboard tells you where it comes from instead of failing silently.
+
+## About
+
+I made this mod for myself. I have a tonne of custom assets but always go back to a select few across builds, and wanted a proper way to file my favourites. I have little coding experience: my partner, who does code, and Claude helped build it. I've tested it on the current patch alongside popular mods without issues, but any feedback is appreciated!
 	</LongDescription>
 	<!--Thumbnail-->
 	<Thumbnail Value="Properties/Thumbnail.png" />
 	<!--Screenshot, can be set multiple times-->
-	<Screenshot Value="" />
+	<Screenshot Value="Properties/Screenshots/01-collections.png" />
+	<Screenshot Value="Properties/Screenshots/02-filters.png" />
+	<Screenshot Value="Properties/Screenshots/03-recent.png" />
+	<Screenshot Value="Properties/Screenshots/04-quick-pins.png" />
+	<Screenshot Value="Properties/Screenshots/05-tool-options.png" />
+	<Screenshot Value="Properties/Screenshots/06-info-panel.png" />
+	<Screenshot Value="Properties/Screenshots/07-pin-district.png" />
 	<!--Tag, can be set multiple times-->
 	<Tag Value="" />
 	<!--Link to the forum post where the mod can be discussed-->
-	<ForumLink Value="" />
+	<ForumLink Value="https://forum.paradoxplaza.com/forum/threads/pinboard.1931900/" />
 	<!--Version of the mod-->
-	<ModVersion Value="1.2.1" />
+	<ModVersion Value="2.0.0" />
 	<!--Recommended version of the base game to use the mod-->
 	<GameVersion Value="1.6.*" />
 	<!--Dependency for the mod, can be set multiple times-->
@@ -41,18 +61,32 @@ I made this mod for myself, as I am the type of player that has a tonne of custo
 	<RequiredDLC Value="" />
 	<!--Change log for new version. Single line or multi line. Supports minimal markdown subset-->
 	<ChangeLog>
-# 1.2.1
+# 2.0.0
 
-- Recompiled and updated for the Cities: Skylines II 1.6.2f1 patch. No functional changes.
+Your pins, collections and filters carry over automatically. There's nothing to do. Your old pins file is left untouched as a backup.
 
-# 1.2.0
+**New**
+- New look that uses the game's own colours and follows your interface settings.
+- Tabs: Pins, Recent, Quick pins and More.
+- Quick pins: pick up nine favourites with Alt + 1 to 9, or from the tool options box.
+- Most Used list, next to Recently Placed.
+- Search across all your pins at once.
+- Pin from the side info panel when you click a building, tree or road.
+- Pin a whole district in one go.
+- Share collections with share codes, including where each asset comes from.
+- Ctrl + Shift + B pins the asset you're holding.
+- Options to choose what Recently Placed and Most Used keep track of.
+- Undo, move and copy pins, reorder, more ways to sort, grid view and a movable panel.
 
-- **New: Recently Placed** — a built-in, auto-managed collection at the top of the panel that tracks assets as you build with them, so you never lose track of what you just used.
-- Pin any Recently Placed item into a collection or a specific list from an inline picker, then clear the list whenever you like.
-- UI polish: clearer separation for the Recently Placed row, aligned pin-count badges that no longer shift on hover, and tidier icon spacing.
+**Fixed**
+- Ticking a filter could hide an asset.
+- Recently Placed counted bulldozing.
+- Terrain brushes and zones weren't tracked.
+- Lag when picking assets and opening long lists.
+- Names and pictures now follow your game language and asset updates.
 	</ChangeLog>
 	<!--External link, can be set multiple times. supported types are "discord", "github", "youtube", "twitch", "x", "paypal", "patreon", "buymeacoffee", "kofi", "crowdin", "gitlab", "gofundme"-->
 	<ExternalLink Type="github" Url="https://github.com/jackalderton0405/CS2_PinIt" />
 	<!--Supported values Public, Private, Unlisted-->
-	<AccessLevel Value="Unlisted" />
+	<AccessLevel Value="Public" />
 </Publish>

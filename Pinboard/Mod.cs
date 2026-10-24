@@ -10,7 +10,7 @@ namespace Pinboard
 {
     public class Mod : IMod
     {
-        public static ILog log = LogManager.GetLogger($"{nameof(Pinboard)}.{nameof(Mod)}").SetShowsErrorsInUI(false);
+        public static ILog log = LogManager.GetLogger("Pinboard.Mod").SetShowsErrorsInUI(false);
 
         public static Setting Setting { get; private set; }
 
@@ -18,71 +18,33 @@ namespace Pinboard
 
         public void OnLoad(UpdateSystem updateSystem)
         {
-            Console.WriteLine("[Pinboard] OnLoad entered");
+            // Settings, shortcut and text come first. If any of it fails, stop here
+            // with one clear error instead of carrying on and causing follow-on errors.
             try
             {
-                log.Info("[Pinboard] OnLoad started");
-
-                try
-                {
-                    m_Setting = new Setting(this);
-                    m_Setting.RegisterInOptionsUI();
-                    m_Setting.RegisterKeyBindings();
-                    Setting = m_Setting;
-                    log.Info("[Pinboard] Settings registered");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Pinboard] Settings registration failed: {ex}");
-                    log.Error($"[Pinboard] Settings registration failed: {ex}");
-                }
-
-                try
-                {
-                    GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(m_Setting));
-                    log.Info("[Pinboard] Locale added");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Pinboard] Locale failed: {ex}");
-                    log.Error($"[Pinboard] Locale failed: {ex}");
-                }
-
-                try
-                {
-                    AssetDatabase.global.LoadSettings(nameof(Pinboard), m_Setting, new Setting(this));
-                    log.Info("[Pinboard] Asset settings loaded");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Pinboard] AssetDatabase.LoadSettings failed: {ex}");
-                    log.Error($"[Pinboard] AssetDatabase.LoadSettings failed: {ex}");
-                }
-
-                try
-                {
-                    updateSystem.UpdateAt<PinboardUISystem>(SystemUpdatePhase.UIUpdate);
-                    log.Info("[Pinboard] UI system registered");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Pinboard] UISystem registration failed: {ex}");
-                    log.Error($"[Pinboard] UISystem registration failed: {ex}");
-                }
-
-                log.Info("[Pinboard] OnLoad complete");
-                Console.WriteLine("[Pinboard] OnLoad complete");
+                m_Setting = new Setting(this);
+                m_Setting.RegisterInOptionsUI();
+                m_Setting.RegisterKeyBindings();
+                GameManager.instance.localizationManager.AddSource("en-US", new LocaleEN(m_Setting));
+                AssetDatabase.global.LoadSettings("Pinboard", m_Setting, new Setting(this));
+                Setting = m_Setting;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Pinboard] OnLoad fatal exception: {ex}");
-                log.Error($"[Pinboard] OnLoad fatal exception: {ex}");
+                log.Error($"[Pinboard] Start-up failed, the mod is switched off for this session: {ex}");
+                try { m_Setting?.UnregisterInOptionsUI(); } catch { /* it may never have registered */ }
+                m_Setting = null;
+                Setting = null;
+                return;
             }
+
+            updateSystem.UpdateAt<PinboardUISystem>(SystemUpdatePhase.UIUpdate);
+            updateSystem.UpdateAt<PinboardInfoSection>(SystemUpdatePhase.UIUpdate);
+            log.Info("[Pinboard] Loaded");
         }
 
         public void OnDispose()
         {
-            log.Info(nameof(OnDispose));
             m_Setting?.UnregisterInOptionsUI();
             m_Setting = null;
             Setting = null;
